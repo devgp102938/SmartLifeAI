@@ -1,0 +1,154 @@
+SmartLifeAI
+│
+├─────────────────────────────
+│ FRONTEND
+├─────────────────────────────
+│
+├── frontend
+│   │
+│   ├── public
+│   │   ├── favicon.ico
+│   │   ├── logo.png
+│   │   └── manifest.json
+│   │
+│   ├── src
+│   │
+│   │   ├── assets
+│   │   │
+│   │   │   ├── images
+│   │   │   ├── icons
+│   │   │   └── illustrations
+│   │
+│   │   ├── pages
+│   │   │
+│   │   │   ├── Login
+│   │   │   │   ├── Login.jsx
+│   │   │   │   └── Login.css
+│   │   │
+│   │   │   ├── Signup
+│   │   │   │   ├── Signup.jsx
+│   │   │   │   └── Signup.css
+│   │   │
+│   │   │   ├── Dashboard
+│   │   │   │   ├── Dashboard.jsx
+│   │   │   │   └── Dashboard.css
+│   │   │
+│   │   │   ├── TasksHabits
+│   │   │   │   ├── TasksHabits.jsx
+│   │   │   │   └── TasksHabits.css
+│   │   │
+│   │   │   ├── Medicine
+│   │   │   │   ├── Medicine.jsx
+│   │   │   │   └── Medicine.css
+│   │   │
+│   │   │   ├── StudySession
+│   │   │   │   ├── StudySession.jsx
+│   │   │   │   └── StudySession.css
+│   │   │
+│   │   │   └── Profile
+│   │   │       ├── Profile.jsx
+│   │   │       └── Profile.css
+│   │
+│   │   ├── components
+│   │   │
+│   │   │   ├── Navbar
+│   │   │   │   ├── Navbar.jsx
+│   │   │   │   └── Navbar.css
+│   │   │
+│   │   │   ├── Sidebar
+│   │   │   │   ├── Sidebar.jsx
+│   │   │   │   └── Sidebar.css
+│   │   │
+│   │   │   ├── TaskCard
+│   │   │   ├── HabitCard
+│   │   │   ├── MedicineCard
+│   │   │   ├── StudyCard
+│   │   │   ├── ChartCard
+│   │   │   └── ProtectedRoute
+│   │
+│   │   ├── services
+│   │   │
+│   │   │   ├── authService.js
+│   │   │   ├── taskService.js
+│   │   │   ├── habitService.js
+│   │   │   ├── medicineService.js
+│   │   │   ├── studyService.js
+│   │   │   └── dashboardService.js
+│   │
+│   │   ├── context
+│   │   │
+│   │   │   └── AuthContext.jsx
+│   │
+│   │   ├── hooks
+│   │   │
+│   │   │   ├── useAuth.js
+│   │   │   └── useDashboard.js
+│   │
+│   │   ├── utils
+│   │   │
+│   │   │   ├── formatDate.js
+│   │   │   └── calculateStreak.js
+│   │
+│   │   ├── App.jsx
+│   │   ├── main.jsx
+│   │   └── index.css
+│   │
+│   ├── package.json
+│   └── vite.config.js
+│
+├─────────────────────────────
+│ BACKEND
+├─────────────────────────────
+│
+├── backend
+│   │
+│   ├── config
+│   │   ├── db.js
+│   │   └── cookieConfig.js
+│   │
+│   ├── controllers
+│   │   ├── authController.js
+│   │   ├── taskController.js
+│   │   ├── habitController.js
+│   │   ├── medicineController.js
+│   │   ├── studyController.js
+│   │   ├── dashboardController.js
+│   │   └── aiController.js
+│   │
+│   ├── middleware
+│   │   ├── authMiddleware.js
+│   │   ├── adminMiddleware.js
+│   │   ├── errorMiddleware.js
+│   │   └── notFoundMiddleware.js
+│   │
+│   ├── models
+│   │   ├── User.js
+│   │   ├── Task.js
+│   │   ├── Habit.js
+│   │   ├── Medicine.js
+│   │   ├── StudySession.js
+│   │   └── TaskCompletion.js
+│   │
+│   ├── routes
+│   │   ├── authRoutes.js
+│   │   ├── taskRoutes.js
+│   │   ├── habitRoutes.js
+│   │   ├── medicineRoutes.js
+│   │   ├── studyRoutes.js
+│   │   ├── dashboardRoutes.js
+│   │   └── aiRoutes.js
+│   │
+│   ├── services
+│   │   ├── geminiService.js
+│   │   └── analyticsService.js
+│   │
+│   ├── utils
+│   │   ├── generateToken.js
+│   │   ├── calculateStreak.js
+│   │   └── responseHandler.js
+│   │
+│   ├── .env
+│   ├── server.js
+│   └── package.json
+│
+└── README.md
