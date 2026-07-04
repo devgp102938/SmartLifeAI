@@ -7,10 +7,12 @@ const {
     createHabit,
     getHabits,
     getHabitbyId,
+    updateHabit,
 } = require('../controllers/habitController.js');
 
 router.post('/', authmiddleware, createHabit);
 router.get('/', authmiddleware, getHabits);
 router.get('/:id', authmiddleware,getHabitbyId);
+router.put('/:id', authmiddleware, updateHabit);
 
 module.exports = router;

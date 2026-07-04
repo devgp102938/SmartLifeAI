@@ -107,9 +107,69 @@ const getHabitbyId = async (req, res) => {
     }
 }
 
+//update habit
+
+const updateHabit = async (req, res) => {
+    try
+    {
+        const habit = await Habit.findById(req.params.id);
+
+        if(!habit){
+            return res.status(404).json({
+                success: false,
+                message: "Habit not found"
+            });
+        }
+
+        if(habit.user.toString() !== req.user._id.toString()){
+            return res.status(403).json({
+                message: "You are not authorized to update this habit"
+            });
+        }
+
+        const {title, description, durationDays, startDate} = req.body;
+
+        if(title !== undefined){
+            habit.title = title;
+        }
+        if(description !== undefined){
+            habit.description = description;
+        }
+        if(durationDays !== undefined){
+            habit.durationDays = durationDays;
+        }
+        if(startDate !== undefined){
+            habit.startDate = startDate;
+        }
+
+        if(startDate || durationDays){
+            const start = new Date(startDate);
+            const end = new Date(start);
+
+            end.setDate(end.getDate() + Number(habit.durationDays) - 1);
+
+            habit.endDate = end;
+        }
+
+        await habit.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Habit updated successfully",
+            habit,
+        });
+    }
+    catch(err){
+        res.status(500).json({
+            message : err.message
+        });
+    }
+}
+
 module.exports = {
     createHabit,
     getHabits,
     getHabitbyId,
+    updateHabit,
 }
 
