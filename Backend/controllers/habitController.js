@@ -75,7 +75,6 @@ const getHabits = async (req, res) => {
     }
 }
 
-
 //gethabit with id
 const getHabitbyId = async (req, res) => {
 
@@ -108,7 +107,6 @@ const getHabitbyId = async (req, res) => {
 }
 
 //update habit
-
 const updateHabit = async (req, res) => {
     try
     {
@@ -143,7 +141,7 @@ const updateHabit = async (req, res) => {
         }
 
         if(startDate || durationDays){
-            const start = new Date(startDate);
+            const start = new Date(habit.startDate);
             const end = new Date(start);
 
             end.setDate(end.getDate() + Number(habit.durationDays) - 1);
@@ -166,10 +164,191 @@ const updateHabit = async (req, res) => {
     }
 }
 
+//delete habit
+const deleteHabit = async (req, res) => {
+    try
+    {
+        const habit = await Habit.findById(req.params.id);
+
+         if(!habit){
+            return res.status(404).json({
+                success: false,
+                message: "Habit not found"
+            });
+        }
+
+        if(habit.user.toString() !== req.user._id.toString()){
+            return res.status(403).json({
+                message: "You are not authorized to update this habit"
+            });
+        }
+
+        await HabitHistory.deleteMany({habit : habit._id});
+        await habit.deleteOne();
+
+        res.status(200).json({
+            success : true,
+            message : "Habit has been deleted"
+        });
+    }
+    catch(err){
+        res.status(500).json({
+            message : err.message
+        });
+    }
+}
+
+//complete habit
+const completeHabit = async (req, res) => {
+    try
+    {
+        const habit = await Habit.findById(req.params.id);
+
+        if(!habit){
+            return res.status(404).json({
+                success: false,
+                message: "Habit not found"
+            });
+        }
+
+        if(habit.user.toString() !== req.user._id.toString()){
+            return res.status(403).json({
+                message: "You are not authorized to update this habit"
+            });
+        } 
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const startDate = new Date(habit.startDate);
+        startDate.setHours(0, 0, 0, 0);
+
+        const endDate = new Date(habit.endDate);
+        endDate.setHours(0, 0, 0, 0);
+
+
+        if(today < startDate){
+            return res.status(400).json({
+                success : false,
+                message : "Challenge has not started yet"
+            })
+        }
+        if(today > endDate){
+            return res.status(400).json({
+                success : false,
+                message : "Challenge has ended"
+            })
+        }
+
+        const alreadyCompleted = await HabitHistory.findOne({
+            habit : habit._id,
+            date : today
+        })
+
+        if(alreadyCompleted){
+            return res.status(400).json({
+                success : false,
+                message : "Habit already completed today"
+            });
+        }
+
+        const history = await HabitHistory.create({
+            user : req.user._id,
+            habit : habit._id,
+            date : today
+        });
+
+        res.status(201).json({
+            success : true,
+            message: "Habit completed successfully",
+            history
+        });
+
+       
+
+    }
+    catch(err){
+        res.status(500).json({
+            message : err.message
+        });
+    }
+}
+
+//uncomplete habit
+const uncompleteHabit = async (req, res) => {
+    try
+    {
+        const habit = await Habit.findById(req.params.id);
+
+        if(!habit){
+            return res.status(404).json({
+                success: false,
+                message: "Habit not found"
+            });
+        }
+
+        if(habit.user.toString() !== req.user._id.toString()){
+            return res.status(403).json({
+                message: "You are not authorized to update this habit"
+            });
+        } 
+
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
+        const startDate = new Date(habit.startDate);
+        startDate.setHours(0,0,0,0);
+
+        const endDate = new Date(habit.endDate);
+        endDate.setHours(0,0,0,0)
+
+        if(today < startDate){
+            return res.status(400).json({
+                success : false,
+                message : "Challenge has not started yet"
+            });
+        }
+
+        if(today > endDate){
+            return res.status(400).json({
+                success : false,
+                message : "Challenge has ended"
+            });
+        }
+
+        const history = await HabitHistory.findOne({
+            habit : habit._id,
+            date : today
+        });
+
+        if(!history){
+            return res.status(404).json({
+                success : false,
+                message : "No habit history found"
+            })
+        }
+
+        await history.deleteOne();
+
+        res.status(200).json({
+            success : true,
+            message : "Habit marked as incomplete"
+        });
+    }
+    catch(err){
+        res.status(500).json({
+            message : err.message
+        });
+    }
+}
+
 module.exports = {
     createHabit,
     getHabits,
     getHabitbyId,
     updateHabit,
+    deleteHabit,
+    completeHabit,
+    uncompleteHabit,
 }
 

@@ -171,7 +171,7 @@ const deleteTask = async (req, res) =>{
 }
 
 
-//completeTask mark as pending
+//completeTask mark as completed
 const completeTask = async (req, res) => {
     try
     {
