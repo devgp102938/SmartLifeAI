@@ -17,6 +17,13 @@ const createHabit = async (req, res) => {
         const start = new Date(startDate);
         const endDate = new Date(start);
 
+        if(isNaN(start.getTime()) || isNaN(endDate.getTime())) {
+                return res.status(400).json({
+                success: false,
+                message: "Invalid date"
+            });
+        }
+
         endDate.setDate(endDate.getDate() + Number(durationDays) - 1);
 
         const habit = await Habit.create({
@@ -137,6 +144,15 @@ const updateHabit = async (req, res) => {
             habit.durationDays = durationDays;
         }
         if(startDate !== undefined){
+
+            const start = new Date(startDate);
+
+            if(Number.isNaN(start.getTime())){
+                    return res.status(400).json({
+                    success: false,
+                    message: "Invalid date"
+            });
+
             habit.startDate = startDate;
         }
 
@@ -156,6 +172,7 @@ const updateHabit = async (req, res) => {
             message: "Habit updated successfully",
             habit,
         });
+    }
     }
     catch(err){
         res.status(500).json({

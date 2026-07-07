@@ -24,7 +24,14 @@ const createMedicine = async (req, res) => {
 
         //validate dates
         const start = new Date(startDate);
-        const end = new Date(start);
+        const end = new Date(endDate);
+
+        if(isNaN(start.getTime() || isNaN(end.getTime()))){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid date"
+            })
+        }
 
         if(start > end){
             return res.status(400).json({
@@ -44,18 +51,18 @@ const createMedicine = async (req, res) => {
 
 
         //handle daysofweeks
-        const medicineDays = [];
+        let medicineDays = [];
 
         if(scheduleType === 'specific-days'){
 
-            if(!Array.isArray(daysOfWeek) || daysOfWeek.length > 0){
+            if(!Array.isArray(daysOfWeek) || daysOfWeek.length === 0){
                 return res.status(400).json({
                     success: false,
                     message: "Please select at least one day."
                 });
             }
 
-            const valdDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+            const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
             const InValid = daysOfWeek.find(
                 day => !validDays.includes(day)
@@ -75,6 +82,7 @@ const createMedicine = async (req, res) => {
         }
 
         const medicine = await Medicine.create({
+            user : req.user._id,
             name,
             dosage,
             notes,
@@ -87,7 +95,8 @@ const createMedicine = async (req, res) => {
 
         res.status(201).json({
             success : true,
-            message : "Medicine Profile has been created"
+            message : "Medicine Profile has been created",
+            medicine
         });
     }
     catch(err)
@@ -96,4 +105,44 @@ const createMedicine = async (req, res) => {
             message : err.message
         })
     }
+}
+
+//get medicine
+const getMedicine = async (req, res) => {
+    try
+    {
+        const medicine = await Medicine.findById(
+            req.params.id
+        )
+
+        if(!medicine){
+            return res.status(404).json({
+                success : false,
+                message : "Medicine not found"
+            });
+        }
+        if(medicine.user.toString() !== req.user._id.toString()){
+            return res.status(403).json({
+                success : false,
+                message : "Not authorized to access this Medicine records"
+            });
+        }
+
+        res.status(200).json({
+            success : true,
+            medicine,
+        });
+
+    }
+    catch(err)
+    {
+        res.status(500).json({
+            message : err.message
+        })
+    }
+}
+
+module.exports = {
+    createMedicine,
+    getMedicine,
 }
