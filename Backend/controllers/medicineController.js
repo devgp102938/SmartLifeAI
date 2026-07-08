@@ -142,7 +142,40 @@ const getMedicine = async (req, res) => {
     }
 }
 
+
+//getMEdicine by id
+const getMEdicineById = async (req, res) => {
+    try
+    {
+        const medicine = await Medicine.findById(req.params.id);
+
+        if(!medicine){
+            return res.status(404).json({
+                message : "Medicine not found"
+            });
+        }
+
+        if(medicine.user.toString() !== req.user._id.toString()){
+            return res.status(403).json({
+                message : "Not authorized to access this task"
+            });
+        }
+
+        res.status(200).json({
+            success : true,
+            medicine
+        })
+    }
+    catch(err)
+    {
+        res.status(500).json({
+            message : err.message
+        })
+    }
+}
+
 module.exports = {
     createMedicine,
     getMedicine,
+    getMEdicineById,
 }

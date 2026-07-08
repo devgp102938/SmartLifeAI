@@ -5,10 +5,12 @@ const authmiddleware = require('../middleware/authMiddleware');
 
 const {
     createMedicine,
-    getMedicine
+    getMedicine,
+    getMEdicineById,
 } = require("../controllers/medicineController.js");
 
 router.post('/', authmiddleware, createMedicine);
 router.get('/', authmiddleware, getMedicine);
+router.get('/:id', authmiddleware, getMEdicineById);
 
 module.exports = router
