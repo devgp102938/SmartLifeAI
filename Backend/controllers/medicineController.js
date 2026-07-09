@@ -302,6 +302,8 @@ const updateMedicine = async (req, res) => {
     }
 }
 
+
+
 module.exports = {
     createMedicine,
     getMedicine,
