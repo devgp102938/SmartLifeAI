@@ -142,9 +142,8 @@ const getMedicine = async (req, res) => {
     }
 }
 
-
 //getMEdicine by id
-const getMEdicineById = async (req, res) => {
+const getMedicineById = async (req, res) => {
     try
     {
         const medicine = await Medicine.findById(req.params.id);
@@ -157,7 +156,7 @@ const getMEdicineById = async (req, res) => {
 
         if(medicine.user.toString() !== req.user._id.toString()){
             return res.status(403).json({
-                message : "Not authorized to access this task"
+                message : "Not authorized to access this Medicine"
             });
         }
 
@@ -174,8 +173,137 @@ const getMEdicineById = async (req, res) => {
     }
 }
 
+//update medicine
+const updateMedicine = async (req, res) => {
+    try
+    {
+        const medicine = await Medicine.findById(req.params.id);
+
+        if(!medicine){
+            return res.status(404).json({
+                success : false,
+                message : "Medicine not found"
+            });
+        }
+
+        if(medicine.user.toString() !== req.user._id.toString()){
+            return res.status(403).json({
+                success : false,
+                message : "Not authorized to access this task"
+            });
+        }
+
+        const {name, dosage, notes, times, scheduleType, daysOfWeek, startDate, endDate} = req.body;
+
+        if(name !== undefined){
+            medicine.name = name;
+        }
+        if(dosage !== undefined){
+            medicine.dosage = dosage;
+        }
+        if(notes !== undefined){
+            medicine.notes = notes;
+        }
+
+        if(times !== undefined){
+
+            if(!Array.isArray(times) || times.length === 0){
+                return res.status(400).json({
+                    success: false,
+                    message: "At least one medicine time is required."
+                });
+            }
+        }
+
+        const finalStartDate = startDate ? new Date(startDate) : medicine.startDate;
+        const finalEndDate = endDate ? new Date(endDate) : medicine.endDate;
+
+        if(Number.isNaN(finalStartDate.getTime()) || Number.isNaN(FinalEndDate.getTime())){
+            return res.status(400).json({
+                success: false,
+                message: "Invalid date."
+            });
+        }
+
+        if(finalStartDate > finalEndDate){
+            return res.status(400).json({
+                success : false,
+                message : "Start date cannot be after end date"
+            });
+        }
+
+        medicine.startDate = finalStartDate;
+        medicine.endDate = finalEndDate;
+
+        //validate Schedule type
+        if(scheduleType !== undefined || !["daily", "specific-days"].includes(scheduleType)){
+            return res.status(400).json({
+                success: false,
+                message: "Invalid schedule type."
+            });
+        }
+
+        //handles daysofweek
+        const finalScheduleType = scheduleType || medicine.scheduleType;
+
+        if(finalScheduleType == "daily"){
+            medicine.scheduleType = "daily",
+            medicine.daysOfWeek = []
+        }
+        else{
+            medicine.scheduleType = "specific-days";
+
+            if(daysOfWeek !== undefined){
+
+                if(!Array.isArray(daysOfWeek) || daysOfWeek.length === 0){
+                    return res.status(400).json({
+                        success: false,
+                        message: "Please select at least one day."
+                    });
+                }
+                
+
+                const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+                const InValid = daysOfWeek.find(
+                    day => !validDays.includes(day)
+                )
+
+                if(InValid){
+                    return res.status(400).json({
+                        success : false,
+                        message : `Invalid day ${InValid}`
+                    });
+                }
+
+                medicine.daysOfWeek = daysOfWeek;
+            }
+            else if(medicine.daysOfWeek.length === 0){
+                return res.status(400).json({
+                    success: false,
+                    message: "Please provide daysOfWeek for specific-days schedule."
+                });
+            }
+        }
+
+        medicine.save();
+
+        res.status(200).json({
+            success : true,
+            message : "Medicine details has been updated"
+        });
+    }
+    catch(err)
+    {
+        res.status(500).json({
+            success : false,
+            message : err.message
+        });
+    }
+}
+
 module.exports = {
     createMedicine,
     getMedicine,
-    getMEdicineById,
+    getMedicineById,
 }
