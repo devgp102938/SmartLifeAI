@@ -26,7 +26,7 @@ const createMedicine = async (req, res) => {
         const start = new Date(startDate);
         const end = new Date(endDate);
 
-        if(isNaN(start.getTime() || isNaN(end.getTime()))){
+        if(isNaN(start.getTime()) || isNaN(end.getTime())){
             return res.status(400).json({
                 success : false,
                 message : "Invalid date"
@@ -111,20 +111,13 @@ const createMedicine = async (req, res) => {
 const getMedicine = async (req, res) => {
     try
     {
-        const medicine = await Medicine.findById(
-            req.params.id
-        )
+        const medicine = await Medicine.find({user : req.user._id});
+        console.log(medicine)
 
         if(!medicine){
             return res.status(404).json({
                 success : false,
                 message : "Medicine not found"
-            });
-        }
-        if(medicine.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                success : false,
-                message : "Not authorized to access this Medicine records"
             });
         }
 
@@ -189,7 +182,7 @@ const updateMedicine = async (req, res) => {
         if(medicine.user.toString() !== req.user._id.toString()){
             return res.status(403).json({
                 success : false,
-                message : "Not authorized to access this task"
+                message : "Not authorized to access this medicine"
             });
         }
 
@@ -213,12 +206,14 @@ const updateMedicine = async (req, res) => {
                     message: "At least one medicine time is required."
                 });
             }
+
+            medicine.times = times;
         }
 
         const finalStartDate = startDate ? new Date(startDate) : medicine.startDate;
         const finalEndDate = endDate ? new Date(endDate) : medicine.endDate;
 
-        if(Number.isNaN(finalStartDate.getTime()) || Number.isNaN(FinalEndDate.getTime())){
+        if(Number.isNaN(finalStartDate.getTime()) || Number.isNaN(finalEndDate.getTime())){
             return res.status(400).json({
                 success: false,
                 message: "Invalid date."
@@ -236,7 +231,7 @@ const updateMedicine = async (req, res) => {
         medicine.endDate = finalEndDate;
 
         //validate Schedule type
-        if(scheduleType !== undefined || !["daily", "specific-days"].includes(scheduleType)){
+        if(scheduleType !== undefined && !["daily", "specific-days"].includes(scheduleType)){
             return res.status(400).json({
                 success: false,
                 message: "Invalid schedule type."
@@ -286,7 +281,7 @@ const updateMedicine = async (req, res) => {
             }
         }
 
-        medicine.save();
+        await medicine.save();
 
         res.status(200).json({
             success : true,
@@ -302,10 +297,129 @@ const updateMedicine = async (req, res) => {
     }
 }
 
+//take medinine
+const takeDose = async (req, res) => {
+    try
+    {
+        const medicine = await Medicine.findById(req.params.id);
 
+        if(!medicine){
+            return res.status(404).json({
+                success : false,
+                message : "Medicine not found"
+            });
+        }
+
+        if(medicine.user.toString() !== req.user._id.toString()){
+            return res.status(403).json({
+                success : false,
+                message : "Not authorized to access this medicine"
+            });
+        }
+
+        const {scheduledDate, scheduledTime} = req.body;
+
+        if(!scheduledDate){
+            return res.status(403).json({
+                success : false,
+                message : "scheduledDate is required"
+            });
+        }
+
+        if(!scheduledTime){
+            return res.status(403).json({
+                success : false,
+                message : "scheduleTime is required"
+            });
+        }
+
+        const date = new Date(scheduledDate);
+
+        if(isNaN(date.getTime())){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid scheduledDate"
+            });
+        }
+
+        if(!medicine.times.includes(scheduledTime)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid scheduled time for this medicine"
+            });
+        }
+
+        const requestDate = new Date(scheduledDate);
+        requestDate.setHours(0,0,0,0);
+
+        const startDate = new Date(medicine.startDate);
+        startDate.setHours(0,0,0,0);
+
+        const endDate = new Date(medicine.endDate);
+        endDate.setHours(0,0,0,0);
+
+        if(requestDate < startDate || requestDate > endDate){
+            return res.status(400).json({
+                success: false,
+                message: "Scheduled date is outside the medicine schedule"            
+            });
+        }
+
+        if(medicine.scheduleType == "specific-days"){
+
+            const weekDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+            const weekDay = weekDays[(requestDate.getDay() + 6) % 7];
+
+            if(!medicine.daysOfWeek.includes(weekDay)){
+                return res.status(400).json({
+                    success: false,
+                    message: "Medicine is not scheduled for this weekday"
+                });
+            }
+        }
+
+        const existingLog = await MedicineLog.findOne({
+            user : req.user._id,
+            medicine : medicine.id,
+            scheduledDate,
+            scheduledTime
+        });
+
+        if(existingLog){
+            return res.status(400).json({
+                success : false,
+                message : "Dose has already been logged"
+            });
+        }
+
+        const medicinelog = await MedicineLog.create({
+            user : req.user._id,
+            medicine : medicine.id,
+            scheduledDate,
+            scheduledTime,
+            status : "taken",
+            takenAt : Date.now()
+        });
+
+        res.status(200).json({
+            success : true,
+            message : "Medicine dose logged successfully",
+            medicinelog,
+        });
+    }
+    catch(err)
+    {
+        res.status(500).json({
+            message : err.message
+        });
+    }
+}
 
 module.exports = {
     createMedicine,
     getMedicine,
     getMedicineById,
+    updateMedicine,
+    takeDose,
 }
