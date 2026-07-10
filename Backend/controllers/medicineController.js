@@ -381,7 +381,7 @@ const takeDose = async (req, res) => {
 
         const existingLog = await MedicineLog.findOne({
             user : req.user._id,
-            medicine : medicine.id,
+            medicine : medicine._id,
             scheduledDate,
             scheduledTime
         });
@@ -395,7 +395,7 @@ const takeDose = async (req, res) => {
 
         const medicinelog = await MedicineLog.create({
             user : req.user._id,
-            medicine : medicine.id,
+            medicine : medicine._id,
             scheduledDate,
             scheduledTime,
             status : "taken",
@@ -416,10 +416,130 @@ const takeDose = async (req, res) => {
     }
 }
 
+
+//skipDose
+const skipDose = async (req, res) => {
+    try
+    {
+        const medicine = await Medicine.findById(req.params.id);
+
+        if(!medicine){
+            return res.status(404).json({
+                success : false,
+                message : "Medicine not found!"
+            });
+        }
+
+        if(medicine.user.toString() !== req.user._id.toString()){
+            res.status(403).json({
+                success : false,
+                message : "Not authorized to access this medicine"
+            });
+        }
+
+        const {scheduledDate, scheduledTime} = req.body;
+
+        if(!scheduledDate){
+            return res.status(403).json({
+                success : false,
+                message : "scheduledDate is required"
+            });
+        }
+
+        if(!scheduledTime){
+            return res.status(403).json({
+                success : false,
+                message : "scheduledTime is required"
+            });
+        }
+
+        const date = new Date(scheduledDate);
+
+        if(isNaN(date.getTime())){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid scheduledDate"
+            });
+        }
+
+        if(!medicine.times.includes(scheduledTime)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid scheduled time for this medicine"
+            });
+        }
+
+        const requestDate = new Date(scheduledDate);
+        requestDate.setHours(0,0,0,0);
+
+        const startDate = new Date(medicine.startDate);
+        startDate.setHours(0,0,0,0);
+
+        const endDate = new Date(medicine.endDate);
+        endDate.setHours(0,0,0,0);
+
+        if(requestDate < startDate || requestDate > endDate){
+            return res.status(400).json({
+                success: false,
+                message: "Scheduled date is outside the medicine schedule"            
+            });
+        }
+
+        if(medicine.scheduleType == "specific-days"){
+
+            const weekDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+            const weekday = weekDays[(requestDate.getDay() + 6) % 7];
+
+            if(!medicine.daysOfWeek.includes(weekday)){
+                return res.status(400).json({
+                    success: false,
+                    message: "Medicine is not scheduled for this weekday"
+                });
+            }
+        }
+
+        const existingLog = await MedicineLog.findOne({
+            user : req.user._id,
+            medicine : medicine._id,
+            scheduledDate,
+            scheduledTime
+        });
+
+        if(existingLog){
+            return res.status(400).json({
+                success : false,
+                message : "Dose has already been logged" 
+            })
+        }
+
+        const medicinelog = await MedicineLog.create({
+            user : req.user._id,
+            medicine : medicine._id,
+            scheduledDate,
+            scheduledTime,
+            status : "skipped"
+        });
+
+        res.status(201).json({
+            success : true,
+            message : "medicine has logged as skipped",
+            medicinelog
+        });
+    }
+    catch(err)
+    {
+        res.status(500).json({
+            success : false,
+            message : err.message
+        });
+    }
+}
 module.exports = {
     createMedicine,
     getMedicine,
     getMedicineById,
     updateMedicine,
     takeDose,
+    skipDose,
 }
