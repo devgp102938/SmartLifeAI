@@ -1,5 +1,6 @@
 const Habit = require('../models/Habit.js');
 const HabitHistory = require('../models/HabitHistory.js');
+const mongoose = require('mongoose');
 
 //crate Habit
 const createHabit = async (req, res) => {
@@ -87,6 +88,13 @@ const getHabitbyId = async (req, res) => {
 
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid Habit id"
+            });
+        }
+
         const habit = await Habit.findById(req.params.id);
 
         if(!habit){
@@ -117,6 +125,13 @@ const getHabitbyId = async (req, res) => {
 const updateHabit = async (req, res) => {
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid Habit id"
+            });
+        }
+
         const habit = await Habit.findById(req.params.id);
 
         if(!habit){
@@ -148,11 +163,11 @@ const updateHabit = async (req, res) => {
             const start = new Date(startDate);
 
             if(Number.isNaN(start.getTime())){
-                    return res.status(400).json({
+                return res.status(400).json({
                     success: false,
                     message: "Invalid date"
-            });
-
+                });
+            }
             habit.startDate = startDate;
         }
 
@@ -173,8 +188,8 @@ const updateHabit = async (req, res) => {
             habit,
         });
     }
-    }
-    catch(err){
+    catch(err)
+    {
         res.status(500).json({
             message : err.message
         });
@@ -185,6 +200,13 @@ const updateHabit = async (req, res) => {
 const deleteHabit = async (req, res) => {
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid Habit id"
+            });
+        }
+
         const habit = await Habit.findById(req.params.id);
 
          if(!habit){
@@ -219,6 +241,13 @@ const deleteHabit = async (req, res) => {
 const completeHabit = async (req, res) => {
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid Habit id"
+            });
+        }
+
         const habit = await Habit.findById(req.params.id);
 
         if(!habit){
@@ -295,6 +324,13 @@ const completeHabit = async (req, res) => {
 const uncompleteHabit = async (req, res) => {
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid Habit id"
+            });
+        }
+        
         const habit = await Habit.findById(req.params.id);
 
         if(!habit){

@@ -1,5 +1,6 @@
 const Task = require('../models/Task.js');
 const TaskCompletion = require('../models/TaskCompletion.js');
+const mongoose = require('mongoose');
 
 //Create a Task
 const createTask = async (req, res) => {
@@ -60,6 +61,13 @@ const getTasks = async (req, res) => {
 const getTaskById = async (req, res) => {
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "invalid Task id"
+            });
+        }
+
         const task = await Task.findById(req.params.id);
 
         if(!task){
@@ -91,6 +99,13 @@ const getTaskById = async (req, res) => {
 const updateTask = async (req, res) => {
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "invalid Task id"
+            });
+        }
+
         const task = await Task.findById(req.params.id);
 
         if(!task){
@@ -140,6 +155,13 @@ const updateTask = async (req, res) => {
 const deleteTask = async (req, res) =>{
     try 
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "invalid Task id"
+            });
+        }
+
         const task = await Task.findById(req.params.id);
 
         if(!task){
@@ -170,11 +192,17 @@ const deleteTask = async (req, res) =>{
     }
 }
 
-
 //completeTask mark as completed
 const completeTask = async (req, res) => {
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "invalid Task id"
+            });
+        }
+        
         const task = await Task.findById(req.params.id);
 
         if(!task){
@@ -221,6 +249,13 @@ const completeTask = async (req, res) => {
 const uncompleteTask = async(req, res) => {
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "invalid Task id"
+            });
+        }
+        
         const task = await Task.findById(req.params.id);
 
         if(!task){
