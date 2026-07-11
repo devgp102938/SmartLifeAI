@@ -1,5 +1,6 @@
 const Medicine = require('../models/Medicine.js');
 const MedicineLog = require('../models/MedicineLog.js');
+const mongoose = require('mongoose');
 
 //create medicine
 const createMedicine = async (req, res) => {
@@ -102,6 +103,7 @@ const createMedicine = async (req, res) => {
     catch(err)
     {
         res.status(500).json({
+            success : false,
             message : err.message
         })
     }
@@ -111,8 +113,7 @@ const createMedicine = async (req, res) => {
 const getMedicine = async (req, res) => {
     try
     {
-        const medicine = await Medicine.find({user : req.user._id});
-        console.log(medicine)
+        const medicine = await Medicine.find({user : req.user._id}).sort({createdAt : -1});
 
         if(!medicine){
             return res.status(404).json({
@@ -130,6 +131,7 @@ const getMedicine = async (req, res) => {
     catch(err)
     {
         res.status(500).json({
+            success : false,
             message : err.message
         })
     }
@@ -139,6 +141,13 @@ const getMedicine = async (req, res) => {
 const getMedicineById = async (req, res) => {
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success: false,
+                message: "Invalid medicine ID"
+            })
+        }
+
         const medicine = await Medicine.findById(req.params.id);
 
         if(!medicine){
@@ -161,6 +170,7 @@ const getMedicineById = async (req, res) => {
     catch(err)
     {
         res.status(500).json({
+            success : false,
             message : err.message
         })
     }
@@ -170,6 +180,13 @@ const getMedicineById = async (req, res) => {
 const updateMedicine = async (req, res) => {
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid medicine ID"
+            });
+        }
+
         const medicine = await Medicine.findById(req.params.id);
 
         if(!medicine){
@@ -285,7 +302,8 @@ const updateMedicine = async (req, res) => {
 
         res.status(200).json({
             success : true,
-            message : "Medicine details has been updated"
+            message : "Medicine details has been updated",
+            medicine
         });
     }
     catch(err)
@@ -297,10 +315,64 @@ const updateMedicine = async (req, res) => {
     }
 }
 
+//delete medicine
+const deleteMedicine = async (req, res) => {
+    try
+    {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid medicine ID"
+            });
+        }
+
+        const medicine = await Medicine.findById(req.params.id);
+
+        if(!medicine){
+            return res.status(404).json({
+                success : false,
+                message : "medicine not found"
+            });
+        }
+
+        if(medicine.user.toString() !== req.user._id.toString()){
+            return res.status(403).json({
+                success : false,
+                message : "Not authorized to access this medicine"
+            });
+        }
+
+        await MedicineLog.deleteMany({
+            medicine : medicine._id
+        });
+
+        await medicine.deleteOne();
+
+        res.status(200).json({
+            success : true,
+            message : "Medicine has been deleted"
+        })
+    }
+    catch(err)
+    {
+        res.status(500).json({
+            success : false,
+            message : err.message
+        });
+    }
+}
+    
 //take medinine
 const takeDose = async (req, res) => {
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid medicine ID"
+            });
+        }
+
         const medicine = await Medicine.findById(req.params.id);
 
         if(!medicine){
@@ -320,14 +392,14 @@ const takeDose = async (req, res) => {
         const {scheduledDate, scheduledTime} = req.body;
 
         if(!scheduledDate){
-            return res.status(403).json({
+            return res.status(400).json({
                 success : false,
                 message : "scheduledDate is required"
             });
         }
 
         if(!scheduledTime){
-            return res.status(403).json({
+            return res.status(400).json({
                 success : false,
                 message : "scheduleTime is required"
             });
@@ -352,11 +424,21 @@ const takeDose = async (req, res) => {
         const requestDate = new Date(scheduledDate);
         requestDate.setHours(0,0,0,0);
 
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
         const startDate = new Date(medicine.startDate);
         startDate.setHours(0,0,0,0);
 
         const endDate = new Date(medicine.endDate);
         endDate.setHours(0,0,0,0);
+
+        if(requestDate > today){
+            return res.status(400).json({
+                success: false,
+                message: "Future doses cannot be logged"
+        });
+        }
 
         if(requestDate < startDate || requestDate > endDate){
             return res.status(400).json({
@@ -411,16 +493,23 @@ const takeDose = async (req, res) => {
     catch(err)
     {
         res.status(500).json({
+            success : false,
             message : err.message
         });
     }
 }
 
-
 //skipDose
 const skipDose = async (req, res) => {
     try
     {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid medicine ID"
+            });
+        }
+
         const medicine = await Medicine.findById(req.params.id);
 
         if(!medicine){
@@ -431,7 +520,7 @@ const skipDose = async (req, res) => {
         }
 
         if(medicine.user.toString() !== req.user._id.toString()){
-            res.status(403).json({
+            return res.status(403).json({
                 success : false,
                 message : "Not authorized to access this medicine"
             });
@@ -440,14 +529,14 @@ const skipDose = async (req, res) => {
         const {scheduledDate, scheduledTime} = req.body;
 
         if(!scheduledDate){
-            return res.status(403).json({
+            return res.status(400).json({
                 success : false,
                 message : "scheduledDate is required"
             });
         }
 
         if(!scheduledTime){
-            return res.status(403).json({
+            return res.status(400).json({
                 success : false,
                 message : "scheduledTime is required"
             });
@@ -472,11 +561,21 @@ const skipDose = async (req, res) => {
         const requestDate = new Date(scheduledDate);
         requestDate.setHours(0,0,0,0);
 
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
         const startDate = new Date(medicine.startDate);
         startDate.setHours(0,0,0,0);
 
         const endDate = new Date(medicine.endDate);
         endDate.setHours(0,0,0,0);
+
+        if(requestDate > today){
+            return res.status(400).json({
+                success : false,
+                message : "Cant skip future dose"
+            })
+        }
 
         if(requestDate < startDate || requestDate > endDate){
             return res.status(400).json({
@@ -535,11 +634,102 @@ const skipDose = async (req, res) => {
         });
     }
 }
+
+//undoDoseAction
+const undoDoseAction = async (req, res) => {
+    try
+    {
+        if(!mongoose.Types.ObjectId.isValid(req.params.id)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid medicine ID"
+            });
+        }
+        
+        const medicine = await Medicine.findById(req.params.id);
+
+        if(!medicine){
+            return res.status(404).json({
+                success : false,
+                message : "Medicine not found!"
+            });
+            }
+
+        if(medicine.user.toString() !== req.user._id.toString()){
+            return res.status(403).json({
+                success : false,
+                message : "Not authorized to access this medicine"
+            });
+        }
+
+        const {scheduledDate, scheduledTime} = req.body;
+
+        if(!scheduledDate){
+            return res.status(400).json({
+                success : false,
+                message : "Schedule date is required"
+            });
+        }
+
+        const date = new Date(scheduledDate);
+        if(Number.isNaN(date.getTime())){
+            return res.status(400).json({
+                success: false,
+                message: "Invalid scheduledDate."
+            });
+        }
+
+        if(!scheduledTime){
+            return res.status(400).json({
+                success : false,
+                message : "Schedule time is required"
+            });
+        }
+
+        if(!medicine.times.includes(scheduledTime)){
+            return res.status(400).json({
+                success: false,
+                message: "Invalid scheduled time."
+            });
+        }
+
+        const medicinelog = await MedicineLog.findOne({
+            user : req.user._id,
+            medicine : medicine._id,
+            scheduledDate,
+            scheduledTime
+        });
+
+        if(!medicinelog){
+            return res.status(404).json({
+                success : false,
+                message : "No dose log found for the specified date and time."
+            });
+        }
+
+        await medicinelog.deleteOne();
+
+        res.status(200).json({
+            success : true,
+            message : "Dose action has been undone successfully."
+        });
+    }
+    catch(err)
+    {
+        res.status(500).json({
+            success : false,
+            message : err.message
+        })
+    }
+}
+
 module.exports = {
     createMedicine,
     getMedicine,
     getMedicineById,
     updateMedicine,
+    deleteMedicine,
     takeDose,
     skipDose,
+    undoDoseAction,
 }
