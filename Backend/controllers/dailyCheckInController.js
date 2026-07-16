@@ -115,3 +115,7 @@ const createDailyCheckIn = async (req, res) => {
         })
     }
 }
+
+module.exports = {
+    createDailyCheckIn,
+}
