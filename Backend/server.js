@@ -14,14 +14,14 @@ const authRoutes = require('./routes/authRoutes.js');
 const taskRoutes = require('./routes/taskRoutes.js');
 const habitRoutes = require('./routes/habitRoutes.js');
 const medicineRoutes = require('./routes/medicineRoutes.js');
-const dailyCheckIn = require('./routes/dailyCheckInRoutes.js');
+const dailyCheckInRoutes = require('./routes/dailyCheckInRoutes.js');
 
 
 app.use('/api/auth', authRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/habits', habitRoutes);
 app.use('/api/medicine', medicineRoutes);
-app.use('/api/checkin', dailyCheckIn);
+app.use('/api/check-ins', dailyCheckInRoutes);
 
 app.listen(process.env.PORT, () => {
     console.log(`sever is running on port ${process.env.PORT}`);
