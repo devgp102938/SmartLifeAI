@@ -36,6 +36,16 @@ const TaskSchema = new mongoose.Schema({
         type : String,
         enum : ['pending', 'completed'],
         default : 'pending'
+    },
+
+    isDeleted : {
+        type : Boolean,
+        default : false
+    },
+
+    deletedAt : {
+        type : Date,
+        default : null
     }
 },
 {

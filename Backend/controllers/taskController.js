@@ -1,5 +1,5 @@
 const Task = require('../models/Task.js');
-const TaskCompletion = require('../models/TaskCompletion.js');
+const TaskActivity = require('../models/TaskActivity.js');
 const mongoose = require('mongoose');
 
 //Create a Task
@@ -8,17 +8,36 @@ const createTask = async (req, res) => {
     {
         const {title, description, dueDate, priority} = req.body;
 
-        if(!title || !dueDate || !priority){
+        if(!title || !dueDate){
             return res.status(401).json({
                 message : "All feild are required"
             });
+        }
+
+        const due = new Date(dueDate);
+        if(Number.isNaN(due.getTime())){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid due date."
+            })
+        }
+        due.setHours(0,0,0,0);
+
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
+        if(due < today){
+            return res.status(400).json({
+                success : false,
+                message : "Due date cannot be before today."
+            })
         }
 
         const task = await Task.create({
             user : req.user._id,
             title,
             description,
-            dueDate,
+            dueDate : due,
             priority,
         });
 
@@ -41,7 +60,8 @@ const getTasks = async (req, res) => {
     try
     {
         const tasks = await Task.find({
-            user : req.user._id
+            user : req.user._id,
+            isDeleted : false
         }).sort({dueDate : 1}); //Duedate 1 sort tasks in  soonest-due tasks order 
 
         res.status(200).json({
@@ -68,17 +88,15 @@ const getTaskById = async (req, res) => {
             });
         }
 
-        const task = await Task.findById(req.params.id);
+        const task = await Task.findOne({
+            _id : req.params.id,
+            user : req.user._id,
+            isDeleted : false
+        });
 
         if(!task){
             return res.status(404).json({
                 message : "Task not found"
-            });
-        }
-
-        if(task.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                message : "Not authorized to access this task"
             });
         }
 
@@ -106,17 +124,15 @@ const updateTask = async (req, res) => {
             });
         }
 
-        const task = await Task.findById(req.params.id);
+        const task = await Task.findOne({
+            _id : req.params.id,
+            user : req.user._id,
+            isDeleted : false
+        });
 
         if(!task){
             return res.status(404).json({
                 message : "Task not found"
-            });
-        }
-
-        if(task.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                message : "Not authorized to access this task"
             });
         }
 
@@ -129,7 +145,35 @@ const updateTask = async (req, res) => {
             task.description = description
         }
         if(dueDate !== undefined){
-            task.dueDate = dueDate
+
+            if(task.status == "completed"){
+                return res.status(400).json({
+                    success: false,
+                    message: "Cannot change due date of a completed task."
+                });
+            }
+            
+            const due = new Date(dueDate);
+            if(Number.isNaN(due.getTime())){
+                return res.status(400).json({
+                    success : false,
+                    message : "Invalid due date."
+                })
+            }
+            due.setHours(0,0,0,0);
+
+            const today = new Date();
+            today.setHours(0,0,0,0);
+
+            if(due < today){
+                return res.status(400).json({
+                    success : false,
+                    message : "Due date cannot be before today."
+                });
+            }
+            else{
+                task.dueDate = due;
+            }
         }
         if(priority !== undefined){
             task.priority = priority
@@ -162,7 +206,11 @@ const deleteTask = async (req, res) =>{
             });
         }
 
-        const task = await Task.findById(req.params.id);
+        const task = await Task.findOne({
+            _id : req.params.id,
+            user : req.user._id,
+            isDeleted : false
+        });
 
         if(!task){
             return res.status(404).json({
@@ -170,14 +218,10 @@ const deleteTask = async (req, res) =>{
             });
         }
 
-        if(task.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                message : "Not authorized to access this task"
-            });
-        }
+        task.isDeleted = true;
+        task.deletedAt = Date.now();
 
-        await TaskCompletion.deleteOne({task : task._id});
-        await task.deleteOne();
+        await task.save();
 
         res.status(200).json({
             success : true,
@@ -203,21 +247,19 @@ const completeTask = async (req, res) => {
             });
         }
         
-        const task = await Task.findById(req.params.id);
+        const task = await Task.findOne({
+            _id : req.params.id,
+            user : req.user._id,
+            isDeleted : false
+        });
 
         if(!task){
             return res.status(404).json({
                 message : "Task not found"
             });
         }
-        
-        if(task.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                message : "Not authorized to access this task"
-            });
-        }
 
-        if(task.status == 'completed'){
+        if(task.status === 'completed'){
             return res.status(400).json({
                 message : "Task is already completed"
             });
@@ -226,9 +268,11 @@ const completeTask = async (req, res) => {
         task.status = "completed";
         await task.save();
 
-        await TaskCompletion.create({
+        await TaskActivity.create({
             user : req.user._id,
-            task : task._id
+            task : task._id,
+            action : "completed",
+            dueDateAtAction : task.dueDate
         });
 
         res.status(200).json({
@@ -256,21 +300,20 @@ const uncompleteTask = async(req, res) => {
             });
         }
         
-        const task = await Task.findById(req.params.id);
+        const task = await Task.findOne({
+            _id : req.params.id,
+            user : req.user._id,
+            isDeleted : false
+        })
 
         if(!task){
             return res.status(404).json({
+                success : false,
                 message : "Task not found"
             });
         }
 
-        if(task.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                message : "Not authorized to access this task"
-            });
-        }
-
-        if(task.status == 'pending'){
+        if(task.status === 'pending'){
              return res.status(400).json({
                 message : "Task is already pending"
             });
@@ -279,7 +322,12 @@ const uncompleteTask = async(req, res) => {
         task.status = 'pending'
         await task.save();
 
-        await TaskCompletion.deleteMany({task : task._id});
+        await TaskActivity.create({
+            user : req.user._id,
+            task : task._id,
+            action : 'uncompleted',
+            dueDateAtAction : task.dueDate
+        })
 
         res.status(200).json({
             success : true,
