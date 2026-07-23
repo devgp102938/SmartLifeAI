@@ -462,4 +462,3 @@ module.exports = {
     completeHabit,
     uncompleteHabit,
 }
-
