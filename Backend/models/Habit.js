@@ -36,6 +36,16 @@ const HabitSchema = new mongoose.Schema({
     endDate : {
         type : Date,
         required : true
+    },
+
+    isDeleted : {
+        type : Boolean,
+        default : false
+    },
+
+    deletedAt : {
+        type : Date,
+        default : null
     }
 },
     {

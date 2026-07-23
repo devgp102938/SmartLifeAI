@@ -4,35 +4,53 @@ const mongoose = require('mongoose');
 
 //crate Habit
 const createHabit = async (req, res) => {
-
     try
     {
         const {title, description, durationDays, startDate} = req.body;
 
         if(!title || !durationDays || !startDate){
             return res.status(400).json({
-                messgae : "All feild are required"
+                messgae : "All fields are required"
             });
         }
+
+        const today = new Date();
+        today.setHours(0,0,0,0);
 
         const start = new Date(startDate);
-        const endDate = new Date(start);
+        if(isNaN(start.getTime())){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid Start date"
+            })
+        }
+        start.setHours(0,0,0,0);
 
-        if(isNaN(start.getTime()) || isNaN(endDate.getTime())) {
-                return res.status(400).json({
-                success: false,
-                message: "Invalid date"
-            });
+        if(start < today){
+            return res.status(400).json({
+                success : false,
+                message : "startDate cannot be in the past"
+            })
         }
 
-        endDate.setDate(endDate.getDate() + Number(durationDays) - 1);
+        const days = Number(durationDays);
+
+        if(!Number.isInteger(days) || days < 1 || days > 365){
+            return res.status(400).json({
+                success:false,
+                message:"Invalid durationDays"
+            })
+        }
+
+        const endDate = new Date(start);
+        endDate.setDate(endDate.getDate() + days - 1);
 
         const habit = await Habit.create({
             user : req.user._id,
             title,
             description,
-            durationDays,
-            startDate,
+            durationDays : days,
+            startDate : start,
             endDate
         });
 
@@ -46,6 +64,7 @@ const createHabit = async (req, res) => {
     catch(err)
     {
         res.status(500).json({
+            success : false,
             message : err.message
         })
     }
@@ -55,9 +74,13 @@ const createHabit = async (req, res) => {
 const getHabits = async (req, res) => {
     try
     {
-        const habits = await Habit.find({user : req.user._id}).sort({startDate : 1});
+        const habits = await Habit.find({
+            user : req.user._id,
+            isDeleted : false
+        }).sort({startDate : 1});
         
         const now = new Date();
+        now.setHours(0,0,0,0);
 
         const habitsWithStatus = habits.map(habit => {
         const habitObj = habit.toObject();
@@ -78,6 +101,7 @@ const getHabits = async (req, res) => {
     catch(err)
     {
         res.status(500).json({
+            success : false,
             message : err.message,
         })
     }
@@ -95,20 +119,18 @@ const getHabitbyId = async (req, res) => {
             });
         }
 
-        const habit = await Habit.findById(req.params.id);
+        const habit = await Habit.findOne({
+            _id : req.params.id,
+            user  : req.user._id,
+            isDeleted : false
+        });
 
         if(!habit){
             return res.status(404).json({
                 message : "No habit found!"
             });
         }
-
-        if(habit.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                message : "Not authorized to access this Habit Profile"
-            });
-        }
-
+        
         res.status(200).json({
             success : true,
             habit,
@@ -116,6 +138,7 @@ const getHabitbyId = async (req, res) => {
     }
     catch(err){
         res.status(500).json({
+            success : false,
             message : err.message
         });
     }
@@ -132,7 +155,11 @@ const updateHabit = async (req, res) => {
             });
         }
 
-        const habit = await Habit.findById(req.params.id);
+        const habit = await Habit.findOne({
+            _id : req.params.id,
+            user : req.user._id,
+            isDeleted : false
+        });
 
         if(!habit){
             return res.status(404).json({
@@ -141,13 +168,25 @@ const updateHabit = async (req, res) => {
             });
         }
 
-        if(habit.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                message: "You are not authorized to update this habit"
+        const {title, description, durationDays, startDate} = req.body;
+
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
+        const habitStart = new Date(habit.startDate);
+        habitStart.setHours(0,0,0,0);
+
+        const started = today >= habitStart;
+
+        if(started && (
+            startDate !== undefined ||
+            durationDays !== undefined
+        )){
+            return res.status(400).json({
+                success : false,
+                message : "Cannot change startDate or durationDays after the habit has started"
             });
         }
-
-        const {title, description, durationDays, startDate} = req.body;
 
         if(title !== undefined){
             habit.title = title;
@@ -155,30 +194,50 @@ const updateHabit = async (req, res) => {
         if(description !== undefined){
             habit.description = description;
         }
+        
         if(durationDays !== undefined){
-            habit.durationDays = durationDays;
+
+            const days = Number(durationDays);
+
+            if(!Number.isInteger(days) || days < 1 || days > 365){
+                return res.status(400).json({
+                    success : false,
+                    message : "Invalid durationDays"
+                });
+            }
+
+            habit.durationDays = days;
         }
+
         if(startDate !== undefined){
 
             const start = new Date(startDate);
-
-            if(Number.isNaN(start.getTime())){
+            if(isNaN(start.getTime())){
                 return res.status(400).json({
-                    success: false,
-                    message: "Invalid date"
+                    success : false,
+                    message : "Invalid startDate"
                 });
             }
-            habit.startDate = startDate;
+            start.setHours(0,0,0,0);
+
+            if(start < today){
+                return res.status(400).json({
+                    success : false,
+                    message : "startDate cannot be in the past"
+                });
+            }
+
+            habit.startDate = start;
         }
 
-        if(startDate || durationDays){
-            const start = new Date(habit.startDate);
-            const end = new Date(start);
+        if(startDate !== undefined || durationDays !== undefined){
+            const end = new Date(habit.startDate);
+            end.setHours(0,0,0,0);
 
-            end.setDate(end.getDate() + Number(habit.durationDays) - 1);
-
+            end.setDate(end.getDate() + habit.durationDays - 1);
             habit.endDate = end;
         }
+
 
         await habit.save();
 
@@ -191,6 +250,7 @@ const updateHabit = async (req, res) => {
     catch(err)
     {
         res.status(500).json({
+            success : false,
             message : err.message
         });
     }
@@ -207,7 +267,11 @@ const deleteHabit = async (req, res) => {
             });
         }
 
-        const habit = await Habit.findById(req.params.id);
+        const habit = await Habit.findOne({
+            _id : req.params.id,
+            user : req.user._id,
+            isDeleted : false
+        });
 
          if(!habit){
             return res.status(404).json({
@@ -216,14 +280,10 @@ const deleteHabit = async (req, res) => {
             });
         }
 
-        if(habit.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                message: "You are not authorized to update this habit"
-            });
-        }
+        habit.isDeleted = true;
+        habit.deletedAt = new Date();
 
-        await HabitHistory.deleteMany({habit : habit._id});
-        await habit.deleteOne();
+        await habit.save();
 
         res.status(200).json({
             success : true,
@@ -232,6 +292,7 @@ const deleteHabit = async (req, res) => {
     }
     catch(err){
         res.status(500).json({
+            success : false,
             message : err.message
         });
     }
@@ -248,7 +309,11 @@ const completeHabit = async (req, res) => {
             });
         }
 
-        const habit = await Habit.findById(req.params.id);
+        const habit = await Habit.findOne({
+            _id : req.params.id,
+            user : req.user._id,
+            isDeleted : false
+        });
 
         if(!habit){
             return res.status(404).json({
@@ -256,12 +321,6 @@ const completeHabit = async (req, res) => {
                 message: "Habit not found"
             });
         }
-
-        if(habit.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                message: "You are not authorized to update this habit"
-            });
-        } 
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -287,6 +346,7 @@ const completeHabit = async (req, res) => {
         }
 
         const alreadyCompleted = await HabitHistory.findOne({
+            user : req.user._id,
             habit : habit._id,
             date : today
         })
@@ -309,12 +369,10 @@ const completeHabit = async (req, res) => {
             message: "Habit completed successfully",
             history
         });
-
-       
-
     }
     catch(err){
         res.status(500).json({
+            success : false,
             message : err.message
         });
     }
@@ -331,7 +389,11 @@ const uncompleteHabit = async (req, res) => {
             });
         }
         
-        const habit = await Habit.findById(req.params.id);
+        const habit = await Habit.findOne({
+            _id : req.params.id,
+            user : req.user._id,
+            isDeleted : false
+        });
 
         if(!habit){
             return res.status(404).json({
@@ -339,12 +401,6 @@ const uncompleteHabit = async (req, res) => {
                 message: "Habit not found"
             });
         }
-
-        if(habit.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                message: "You are not authorized to update this habit"
-            });
-        } 
 
         const today = new Date();
         today.setHours(0,0,0,0);
@@ -370,6 +426,7 @@ const uncompleteHabit = async (req, res) => {
         }
 
         const history = await HabitHistory.findOne({
+            user : req.user._id,
             habit : habit._id,
             date : today
         });
@@ -390,6 +447,7 @@ const uncompleteHabit = async (req, res) => {
     }
     catch(err){
         res.status(500).json({
+            success : false,
             message : err.message
         });
     }
