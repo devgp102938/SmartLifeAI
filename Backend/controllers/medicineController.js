@@ -181,7 +181,7 @@ const createMedicine = async (req, res) => {
                     medicine : medicine[0]._id,
                     times : uniqueTimes,
                     scheduleType,
-                    daysOfWeek : uniqueDays,
+                    daysOfWeek : finalDays,
                     effectiveFrom : start,
                     effectiveUntil : null,
                     isActive : true
