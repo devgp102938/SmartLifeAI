@@ -186,7 +186,8 @@ const createMedicine = async (req, res) => {
                     effectiveUntil : null,
                     isActive : true
                 }
-            ]
+            ],
+            {session}
         );
 
         await session.commitTransaction();
