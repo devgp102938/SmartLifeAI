@@ -1,14 +1,23 @@
 const Medicine = require('../models/Medicine.js');
+const MedicineSchedule = require('../models/MedicineSchedule.js');
 const MedicineLog = require('../models/MedicineLog.js');
 const mongoose = require('mongoose');
 
 //create medicine
 const createMedicine = async (req, res) => {
+
+    const session = await mongoose.startSession();
+
     try
-    { 
+    {
+
+        session.startTransaction();
+
         const {name, dosage, notes, times, scheduleType, daysOfWeek, startDate, endDate} = req.body;
 
         if(!name || !dosage || !times || !scheduleType || !startDate || !endDate){
+            await session.abortTransaction();
+
             return res.status(400).json({
                 success : false,
                 message : "All feild are required"
@@ -17,33 +26,83 @@ const createMedicine = async (req, res) => {
 
          // Validate times array
         if(!Array.isArray(times) || times.length === 0){
+            await session.abortTransaction();
+
             return res.status(400).json({
                 success: false,
                 message: "At least one medicine time is required."
             });
         }
 
+        //HH:MM validation
+        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+        const uniqueTimes = [...new Set(times)];
+
+        if(uniqueTimes.length !== times.length){
+            await session.abortTransaction();
+
+            return res.status(400).json({
+                success : false,
+                message : "Duplicate medicine times are not allowed."
+            });
+        }
+
+        for(let i = 0; i < uniqueTimes.length; i++){
+            if(!timeRegex.test(uniqueTimes[i])){
+                await session.abortTransaction();
+
+                return res.status(400).json({
+                    success : false,
+                    message : `Inavid Times Format ${uniqueTimes[i]}`
+                });
+            }
+        }
+
+        uniqueTimes.sort();
+
         //validate dates
         const start = new Date(startDate);
         const end = new Date(endDate);
 
         if(isNaN(start.getTime()) || isNaN(end.getTime())){
+            await session.abortTransaction();
+
             return res.status(400).json({
                 success : false,
                 message : "Invalid date"
-            })
+            });
         }
 
-        if(start > end){
+        start.setHours(0,0,0,0);
+        end.setHours(0,0,0,0);
+
+        const today = new Date();
+        today.setHours(0,0,0,0);
+
+        if(start < today){
+            await session.abortTransaction();
+
             return res.status(400).json({
-                success: false,
-                message: "Start date cannot be after end date."
+                success : false,
+                message : "Start date cannot be in the past."
+            });
+        }
+
+        if(end < start){
+            await session.abortTransaction();
+
+            return res.status(400).json({
+                success : false,
+                message : "End date cannot be before start date."
             });
         }
 
         
         //Validate schedule type
         if(!['daily', 'specific-days'].includes(scheduleType)){
+            await session.abortTransaction();
+
             return res.status(400).json({
                 success: false,
                 message: "Invalid schedule type."
@@ -52,11 +111,13 @@ const createMedicine = async (req, res) => {
 
 
         //handle daysofweeks
-        let medicineDays = [];
+        let finalDays = [];
 
         if(scheduleType === 'specific-days'){
 
             if(!Array.isArray(daysOfWeek) || daysOfWeek.length === 0){
+                await session.abortTransaction();
+
                 return res.status(400).json({
                     success: false,
                     message: "Please select at least one day."
@@ -65,47 +126,90 @@ const createMedicine = async (req, res) => {
 
             const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-            const InValid = daysOfWeek.find(
+            const normalizedDays  = daysOfWeek.map(day => day.toLowerCase());
+
+            const uniqueDays = [...new Set(normalizedDays)];
+
+            if(uniqueDays.length !== normalizedDays.length){
+                await session.abortTransaction();
+
+                return res.status(400).json({
+                    success : false,
+                    message : "Duplicate weekdays are not allowed"
+                });
+            }
+
+            const InValid = uniqueDays.find(
                 day => !validDays.includes(day)
             );
 
             if(InValid){
+                await session.abortTransaction();
+
                 return res.status(400).json({
                     success : false,
                     message : `Invalid day ${InValid}`
                 });
             }
 
-            medicineDays = daysOfWeek;
+            finalDays = uniqueDays;
         }
         else{
-            medicineDays = [];
+            finalDays = [];
         }
 
-        const medicine = await Medicine.create({
-            user : req.user._id,
-            name,
-            dosage,
-            notes,
-            times,
-            scheduleType,
-            daysOfWeek : medicineDays,
-            startDate : start,
-            endDate : end
-        });
+        //create medicine
+        const medicine = await Medicine.create(
+            [
+                {
+                    user : req.user._id,
+                    name,
+                    dosage,
+                    notes,
+                    startDate : start,
+                    endDate : end
+                }
+            ],
+            {session}
+        );
+
+        //create Schedule
+        const schedule = await MedicineSchedule.create(
+            [
+                {
+                    user : req.user._id,
+                    medicine : medicine[0]._id,
+                    times : uniqueTimes,
+                    scheduleType,
+                    daysOfWeek : uniqueDays,
+                    effectiveFrom : start,
+                    effectiveUntil : null,
+                    isActive : true
+                }
+            ]
+        );
+
+        await session.commitTransaction();
 
         res.status(201).json({
             success : true,
             message : "Medicine Profile has been created",
-            medicine
+            medicine : medicine[0],
+            schedule : schedule[0]
         });
     }
     catch(err)
     {
+        await session.abortTransaction();
+
         res.status(500).json({
             success : false,
             message : err.message
         })
+    }
+    finally
+    {
+        session.endSession();
     }
 }
 

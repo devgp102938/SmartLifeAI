@@ -13,6 +13,12 @@ const MedicineLogSchema = new mongoose.Schema({
         required : true
     },
 
+    schedule : {
+        type : mongoose.Schema.Types.ObjectId,
+        ref : 'MedicineSchedule',
+        required : true
+    },
+
     scheduledDate : {
         type : Date,
         required : true
@@ -43,6 +49,7 @@ const MedicineLogSchema = new mongoose.Schema({
 MedicineLogSchema.index({
     user: 1,
     medicine: 1,
+    schedule : 1,
     scheduledDate: 1,
     scheduledTime: 1
 }, {
