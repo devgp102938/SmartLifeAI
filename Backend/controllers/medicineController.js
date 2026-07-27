@@ -501,7 +501,7 @@ const updateMedicine = async (req, res) => {
 
             const uniqueDays = new Set(finalDays);
 
-            if(uniqueDays.length !== finalDays.length){
+            if(uniqueDays.size !== finalDays.length){
                 await session.abortTransaction();
 
                 return res.status(400).json({
@@ -546,13 +546,11 @@ const updateMedicine = async (req, res) => {
         }
 
         //if treatment has started check if todays dose has been logged
-        const todayDate = new Date();
-        todayDate.setHours(0,0,0,0);
 
         const todayLog = await MedicineLog.findOne({
             user : req.user._id,
             medicine : medicine._id,
-            scheduledDate : todayDate,
+            scheduledDate : today,
         }).session(session);
 
         //Effective dose

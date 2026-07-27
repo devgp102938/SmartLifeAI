@@ -29,7 +29,7 @@ const MedicineScheduleSchema = new mongoose.Schema({
         type : [String],
         enum : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
         default : [],
-        trime : true,
+        trim : true,
         lowercase : true
     },
         
