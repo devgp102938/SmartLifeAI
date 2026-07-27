@@ -535,11 +535,11 @@ const updateMedicine = async (req, res) => {
             await activeSchedule.save({session});
             await medicine.save({session});
 
-            await session.abortTransaction();
+            await session.commitTransaction();
 
             res.status(200).json({
                 success : true,
-                message : "Medicine details has been updated",
+                message : "Medicine details are updated",
                 schedule : activeSchedule,
                 medicine
             });
