@@ -253,17 +253,15 @@ const getMedicineById = async (req, res) => {
             })
         }
 
-        const medicine = await Medicine.findById(req.params.id);
+        const medicine = await Medicine.findOne({
+            user : req.user._id,
+            medicine : medicine._id,
+            isDeleted : false
+        });
 
         if(!medicine){
             return res.status(404).json({
                 message : "Medicine not found"
-            });
-        }
-
-        if(medicine.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                message : "Not authorized to access this Medicine"
             });
         }
 
@@ -283,8 +281,13 @@ const getMedicineById = async (req, res) => {
 
 //update medicine
 const updateMedicine = async (req, res) => {
+
+    const session = await mongoose.startSession();
+
     try
     {
+        session.startTransaction();
+
         if(!mongoose.Types.ObjectId.isValid(req.params.id)){
             return res.status(400).json({
                 success : false,
@@ -292,19 +295,32 @@ const updateMedicine = async (req, res) => {
             });
         }
 
-        const medicine = await Medicine.findById(req.params.id);
+        const medicine = await Medicine.findOne({
+            _id : req.params.id,
+            user : req.user._id,
+            isDeleted : false
+        })
 
         if(!medicine){
+            await session.abortTransaction();
+
             return res.status(404).json({
                 success : false,
                 message : "Medicine not found"
             });
         }
 
-        if(medicine.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
+        const activeSchedule = await MedicineSchedule.findOne({
+            medicine : medicine._id,
+            isActive : true
+        }).sort({effectiveFrom : -1});
+
+        if(!activeSchedule){
+            await session.abortTransaction();
+            
+            return res.status(400).json({
                 success : false,
-                message : "Not authorized to access this medicine"
+                message : "No Active medicine found."
             });
         }
 
@@ -320,103 +336,292 @@ const updateMedicine = async (req, res) => {
             medicine.notes = notes;
         }
 
-        if(times !== undefined){
+        //start/end date rules
+        const today = new Date();
+        today.setHours(0,0,0,0);
 
-            if(!Array.isArray(times) || times.length === 0){
+        const treatmentStarted = today >= new Date(medicine.startDate);
+
+        if(startDate !== undefined){
+            if(treatmentStarted){
+                await session.abortTransaction();
+
                 return res.status(400).json({
-                    success: false,
-                    message: "At least one medicine time is required."
+                    success : false,
+                    message : "Treatment already started. Start date cannot be changed."
                 });
             }
 
-            medicine.times = times;
+            const newStart = new Date(startDate);
+
+            if(Number.isNaN(newStart.getTime())){
+                await session.abortTransaction();
+
+                return res.status(400).json({
+                    success : false,
+                    message : "Invalid start date."
+                });
+            }
+
+            if(newStart < today){
+                await session.abortTransaction();
+
+                return res.status(400).json({
+                    success : false,
+                    message : "Start date cannot be in the past."
+                });
+            }
+
+            medicine.startDate = newStart;
         }
 
-        const finalStartDate = startDate ? new Date(startDate) : medicine.startDate;
-        const finalEndDate = endDate ? new Date(endDate) : medicine.endDate;
+        if(endDate !== undefined){
+            const newEnd = new Date(endDate);
 
-        if(Number.isNaN(finalStartDate.getTime()) || Number.isNaN(finalEndDate.getTime())){
-            return res.status(400).json({
-                success: false,
-                message: "Invalid date."
+            if(Number.isNaN(newEnd.getTime())){
+                await session.abortTransaction();
+
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid end date."
+                });
+            }
+
+            if(newEnd < today){
+                await session.abortTransaction();
+
+                return res.status(400).json({
+                    success : false,
+                    message : "End date cannot in past"
+                });
+            }
+
+            if(newEnd < medicine.startDate){
+                await session.abortTransaction();
+
+                return res.status(400).json({
+                    success : false,
+                    message : "End date cannot be before start date"
+                });
+            }
+
+            medicine.endDate = newEnd;
+        }
+
+        //Detect Schedule Change
+
+        const scheduleChange = times !== undefined ||
+                            scheduleType !== undefined || 
+                            daysOfWeek !== undefined;
+
+        if(!scheduleChange){
+            await medicine.save({session});
+
+            await session.commitTransaction();
+            session.endSession();
+
+
+            res.status(200).json({
+                success : true,
+                message : "Medicine details has been updated",
+                medicine
             });
         }
+        
 
-        if(finalStartDate > finalEndDate){
+        //Final schedule Values
+        const finalScheduleType = scheduleType ?? activeSchedule.scheduleType;
+        const finalTimes = times ?? activeSchedule.times;
+        let finalDays = daysOfWeek ?? activeSchedule.daysOfWeek;
+
+        //validate times
+        if(!Array.isArray(finalTimes) || finalTimes.length === 0){
+            await session.abortTransaction();
+
             return res.status(400).json({
                 success : false,
-                message : "Start date cannot be after end date"
+                message : "At least one medicine time is required."
             });
         }
 
-        medicine.startDate = finalStartDate;
-        medicine.endDate = finalEndDate;
+        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/; //HH:MM
 
-        //validate Schedule type
-        if(scheduleType !== undefined && !["daily", "specific-days"].includes(scheduleType)){
+        const invalidTime = finalTimes.find(time => !timeRegex.test(time));
+
+        if(invalidTime){
+            await session.abortTransaction();
+
             return res.status(400).json({
                 success: false,
-                message: "Invalid schedule type."
+                message: `Invalid time: ${invalidTime}`
             });
         }
 
-        //handles daysofweek
-        const finalScheduleType = scheduleType || medicine.scheduleType;
+        const uniqueTimes = new Set(finalTimes);
 
-        if(finalScheduleType == "daily"){
-            medicine.scheduleType = "daily",
-            medicine.daysOfWeek = []
+        if(uniqueTimes.size !== finalTimes.length){
+            await session.abortTransaction();
+
+            return res.status(400).json({
+                success: false,
+                message: "Duplicate medicine times are not allowed."
+            });
+        }
+
+        const sortedTimes = [...finalTimes].sort();
+
+        //validate scheduletypes
+        if(!['daily', 'specific-days'].includes(finalScheduleType)){
+            await session.abortTransaction();
+
+            return res.status(400).json({
+                success : false,
+                message : "Invalid schedule type."
+            });
+        }
+
+        //validate days of weeks
+        const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+        if(finalScheduleType == 'daily'){
+            finalDays = [];
         }
         else{
-            medicine.scheduleType = "specific-days";
 
-            if(daysOfWeek !== undefined){
+            if(!Array.isArray(finalDays) || finalDays.length === 0){
+                await session.abortTransaction();
 
-                if(!Array.isArray(daysOfWeek) || daysOfWeek.length === 0){
-                    return res.status(400).json({
-                        success: false,
-                        message: "Please select at least one day."
-                    });
-                }
-                
-
-                const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-
-                const InValid = daysOfWeek.find(
-                    day => !validDays.includes(day)
-                )
-
-                if(InValid){
-                    return res.status(400).json({
-                        success : false,
-                        message : `Invalid day ${InValid}`
-                    });
-                }
-
-                medicine.daysOfWeek = daysOfWeek;
-            }
-            else if(medicine.daysOfWeek.length === 0){
                 return res.status(400).json({
                     success: false,
-                    message: "Please provide daysOfWeek for specific-days schedule."
+                    message: "Please select at least one weekday."
+                });
+            }
+
+            finalDays = finalDays.map(day => day.toLowerCase());
+
+            const uniqueDays = new Set(finalDays);
+
+            if(uniqueDays.length !== finalDays.length){
+                await session.abortTransaction();
+
+                return res.status(400).json({
+                    success : false,
+                    message : "Duplicate weekdays are not allowed."
+                });
+            }
+
+            const inValidDay = finalDays.find(day => !validDays.includes(day));
+
+            if(inValidDay){
+                await session.abortTransaction();
+
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid weekday: ${inValidDay}`
                 });
             }
         }
 
-        await medicine.save();
+
+        //if treatment hasn't started yet then update current schedule
+        const effectiveFrom = new Date(activeSchedule.effectiveFrom);
+        effectiveFrom.setHours(0,0,0,0);
+
+        if(today < effectiveFrom){
+            activeSchedule.times = sortedTimes;
+            activeSchedule.scheduleType = finalScheduleType;
+            activeSchedule.daysOfWeek = finalDays;
+
+            await activeSchedule.save({session});
+            await medicine.save({session});
+
+            await session.abortTransaction();
+
+            res.status(200).json({
+                success : true,
+                message : "Medicine details has been updated",
+                schedule : activeSchedule,
+                medicine
+            });
+        }
+
+        //if treatment has started check if todays dose has been logged
+        const todayDate = new Date();
+        todayDate.setHours(0,0,0,0);
+
+        const todayLog = await MedicineLog.findOne({
+            user : req.user._id,
+            medicine : medicine._id,
+            scheduledDate : todayDate,
+        }).session(session);
+
+        //Effective dose
+        const newEffectiveDate = new Date(today);
+
+        if(todayLog){
+            newEffectiveDate.setDate(newEffectiveDate.getDate() + 1);
+        }
+
+        //close old schdule version
+        activeSchedule.isActive = false;
+
+        activeSchedule.effectiveUntil = new Date(newEffectiveDate);
+
+        activeSchedule.effectiveUntil.setDate(activeSchedule.effectiveUntil.getDate() - 1);
+
+        await activeSchedule.save({session});
+
+        //create new Schedule vesrion
+        const latestVesrion = await MedicineSchedule.findOne({
+            medicine : medicine._id
+        }).sort({ version : -1}).session(session);
+
+        const nextVersion = latestVesrion ? latestVesrion.version + 1 : 1;
+
+        const newSchedule = await MedicineSchedule.create(
+            [
+                {
+                    user : req.user._id,
+                    medicine : medicine._id,
+                    times : sortedTimes,
+                    scheduleType : finalScheduleType,
+                    daysOfWeek : finalDays,
+                    effectiveFrom : newEffectiveDate,
+                    effectiveUntil : null,
+                    isActive : true,
+                    version : nextVersion
+                }
+            ],
+            {
+                session
+            }
+        );
+
+        await medicine.save({session});
+
+        await session.commitTransaction();
 
         res.status(200).json({
             success : true,
-            message : "Medicine details has been updated",
-            medicine
+            message : todayLog ? "Medicine schedule updated. New schedule will start tomorrow." 
+            : "Medicine schedule updated successfully.",
+            medicine,
+            schedule : newSchedule[0]
         });
     }
     catch(err)
     {
+        await session.abortTransaction();
+        session.endSession();
+        
         res.status(500).json({
             success : false,
             message : err.message
         });
+    }
+    finally
+    {
+        session.endSession();
     }
 }
 

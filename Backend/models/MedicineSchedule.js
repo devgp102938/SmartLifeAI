@@ -15,7 +15,8 @@ const MedicineScheduleSchema = new mongoose.Schema({
 
     times : [{
         type : String,
-        required : true
+        required : true,
+        trim : true
     }],
     
     scheduleType : {
@@ -27,7 +28,9 @@ const MedicineScheduleSchema = new mongoose.Schema({
     daysOfWeek : {
         type : [String],
         enum : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
-        default : []
+        default : [],
+        trime : true,
+        lowercase : true
     },
         
     effectiveFrom : {
@@ -43,6 +46,11 @@ const MedicineScheduleSchema = new mongoose.Schema({
     isActive : {
         type : Boolean,
         default : true
+    },
+
+    version : {
+        type : Number,
+        default : 1
     }
 },
 {
