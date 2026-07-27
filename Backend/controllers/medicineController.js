@@ -5,19 +5,11 @@ const mongoose = require('mongoose');
 
 //create medicine
 const createMedicine = async (req, res) => {
-
-    const session = await mongoose.startSession();
-
     try
     {
-
-        session.startTransaction();
-
         const {name, dosage, notes, times, scheduleType, daysOfWeek, startDate, endDate} = req.body;
 
         if(!name || !dosage || !times || !scheduleType || !startDate || !endDate){
-            await session.abortTransaction();
-
             return res.status(400).json({
                 success : false,
                 message : "All feild are required"
@@ -26,8 +18,6 @@ const createMedicine = async (req, res) => {
 
          // Validate times array
         if(!Array.isArray(times) || times.length === 0){
-            await session.abortTransaction();
-
             return res.status(400).json({
                 success: false,
                 message: "At least one medicine time is required."
@@ -40,8 +30,6 @@ const createMedicine = async (req, res) => {
         const uniqueTimes = [...new Set(times)];
 
         if(uniqueTimes.length !== times.length){
-            await session.abortTransaction();
-
             return res.status(400).json({
                 success : false,
                 message : "Duplicate medicine times are not allowed."
@@ -50,8 +38,6 @@ const createMedicine = async (req, res) => {
 
         for(let i = 0; i < uniqueTimes.length; i++){
             if(!timeRegex.test(uniqueTimes[i])){
-                await session.abortTransaction();
-
                 return res.status(400).json({
                     success : false,
                     message : `Inavid Times Format ${uniqueTimes[i]}`
@@ -66,8 +52,6 @@ const createMedicine = async (req, res) => {
         const end = new Date(endDate);
 
         if(isNaN(start.getTime()) || isNaN(end.getTime())){
-            await session.abortTransaction();
-
             return res.status(400).json({
                 success : false,
                 message : "Invalid date"
@@ -81,8 +65,6 @@ const createMedicine = async (req, res) => {
         today.setHours(0,0,0,0);
 
         if(start < today){
-            await session.abortTransaction();
-
             return res.status(400).json({
                 success : false,
                 message : "Start date cannot be in the past."
@@ -90,8 +72,6 @@ const createMedicine = async (req, res) => {
         }
 
         if(end < start){
-            await session.abortTransaction();
-
             return res.status(400).json({
                 success : false,
                 message : "End date cannot be before start date."
@@ -101,23 +81,17 @@ const createMedicine = async (req, res) => {
         
         //Validate schedule type
         if(!['daily', 'specific-days'].includes(scheduleType)){
-            await session.abortTransaction();
-
             return res.status(400).json({
                 success: false,
                 message: "Invalid schedule type."
             });
         }
 
-
         //handle daysofweeks
         let finalDays = [];
 
         if(scheduleType === 'specific-days'){
-
             if(!Array.isArray(daysOfWeek) || daysOfWeek.length === 0){
-                await session.abortTransaction();
-
                 return res.status(400).json({
                     success: false,
                     message: "Please select at least one day."
@@ -131,8 +105,6 @@ const createMedicine = async (req, res) => {
             const uniqueDays = [...new Set(normalizedDays)];
 
             if(uniqueDays.length !== normalizedDays.length){
-                await session.abortTransaction();
-
                 return res.status(400).json({
                     success : false,
                     message : "Duplicate weekdays are not allowed"
@@ -144,8 +116,6 @@ const createMedicine = async (req, res) => {
             );
 
             if(InValid){
-                await session.abortTransaction();
-
                 return res.status(400).json({
                     success : false,
                     message : `Invalid day ${InValid}`
@@ -159,26 +129,19 @@ const createMedicine = async (req, res) => {
         }
 
         //create medicine
-        const medicine = await Medicine.create(
-            [
-                {
+        const medicine = await Medicine.create({
                     user : req.user._id,
                     name,
                     dosage,
                     notes,
                     startDate : start,
                     endDate : end
-                }
-            ],
-            {session}
-        );
+                });
 
         //create Schedule
-        const schedule = await MedicineSchedule.create(
-            [
-                {
+        const schedule = await MedicineSchedule.create({
                     user : req.user._id,
-                    medicine : medicine[0]._id,
+                    medicine : medicine._id,
                     times : uniqueTimes,
                     scheduleType,
                     daysOfWeek : finalDays,
@@ -186,31 +149,21 @@ const createMedicine = async (req, res) => {
                     effectiveUntil : null,
                     isActive : true
                 }
-            ],
-            {session}
         );
-
-        await session.commitTransaction();
 
         res.status(201).json({
             success : true,
             message : "Medicine Profile has been created",
-            medicine : medicine[0],
-            schedule : schedule[0]
+            medicine : medicine,
+            schedule : schedule
         });
     }
     catch(err)
     {
-        await session.abortTransaction();
-
         res.status(500).json({
             success : false,
             message : err.message
         })
-    }
-    finally
-    {
-        session.endSession();
     }
 }
 
@@ -255,7 +208,7 @@ const getMedicineById = async (req, res) => {
 
         const medicine = await Medicine.findOne({
             user : req.user._id,
-            medicine : medicine._id,
+            _id : req.params.id,
             isDeleted : false
         });
 
@@ -281,13 +234,8 @@ const getMedicineById = async (req, res) => {
 
 //update medicine
 const updateMedicine = async (req, res) => {
-
-    const session = await mongoose.startSession();
-
     try
     {
-        session.startTransaction();
-
         if(!mongoose.Types.ObjectId.isValid(req.params.id)){
             return res.status(400).json({
                 success : false,
@@ -302,8 +250,6 @@ const updateMedicine = async (req, res) => {
         })
 
         if(!medicine){
-            await session.abortTransaction();
-
             return res.status(404).json({
                 success : false,
                 message : "Medicine not found"
@@ -316,8 +262,6 @@ const updateMedicine = async (req, res) => {
         }).sort({effectiveFrom : -1});
 
         if(!activeSchedule){
-            await session.abortTransaction();
-            
             return res.status(400).json({
                 success : false,
                 message : "No Active medicine found."
@@ -340,12 +284,13 @@ const updateMedicine = async (req, res) => {
         const today = new Date();
         today.setHours(0,0,0,0);
 
-        const treatmentStarted = today >= new Date(medicine.startDate);
+        const medicineStartDate = new Date(medicine.startDate);
+        medicineStartDate.setHours(0,0,0,0);
+
+        const treatmentStarted = today >= medicineStartDate;
 
         if(startDate !== undefined){
             if(treatmentStarted){
-                await session.abortTransaction();
-
                 return res.status(400).json({
                     success : false,
                     message : "Treatment already started. Start date cannot be changed."
@@ -353,10 +298,9 @@ const updateMedicine = async (req, res) => {
             }
 
             const newStart = new Date(startDate);
+            newStart.setHours(0,0,0,0);
 
             if(Number.isNaN(newStart.getTime())){
-                await session.abortTransaction();
-
                 return res.status(400).json({
                     success : false,
                     message : "Invalid start date."
@@ -364,8 +308,6 @@ const updateMedicine = async (req, res) => {
             }
 
             if(newStart < today){
-                await session.abortTransaction();
-
                 return res.status(400).json({
                     success : false,
                     message : "Start date cannot be in the past."
@@ -379,8 +321,6 @@ const updateMedicine = async (req, res) => {
             const newEnd = new Date(endDate);
 
             if(Number.isNaN(newEnd.getTime())){
-                await session.abortTransaction();
-
                 return res.status(400).json({
                     success: false,
                     message: "Invalid end date."
@@ -388,17 +328,13 @@ const updateMedicine = async (req, res) => {
             }
 
             if(newEnd < today){
-                await session.abortTransaction();
-
                 return res.status(400).json({
                     success : false,
                     message : "End date cannot in past"
                 });
             }
 
-            if(newEnd < medicine.startDate){
-                await session.abortTransaction();
-
+            if(newEnd < medicineStartDate){
                 return res.status(400).json({
                     success : false,
                     message : "End date cannot be before start date"
@@ -415,13 +351,9 @@ const updateMedicine = async (req, res) => {
                             daysOfWeek !== undefined;
 
         if(!scheduleChange){
-            await medicine.save({session});
+            await medicine.save();
 
-            await session.commitTransaction();
-            session.endSession();
-
-
-            res.status(200).json({
+            return res.status(200).json({
                 success : true,
                 message : "Medicine details has been updated",
                 medicine
@@ -436,7 +368,6 @@ const updateMedicine = async (req, res) => {
 
         //validate times
         if(!Array.isArray(finalTimes) || finalTimes.length === 0){
-            await session.abortTransaction();
 
             return res.status(400).json({
                 success : false,
@@ -449,8 +380,6 @@ const updateMedicine = async (req, res) => {
         const invalidTime = finalTimes.find(time => !timeRegex.test(time));
 
         if(invalidTime){
-            await session.abortTransaction();
-
             return res.status(400).json({
                 success: false,
                 message: `Invalid time: ${invalidTime}`
@@ -460,7 +389,6 @@ const updateMedicine = async (req, res) => {
         const uniqueTimes = new Set(finalTimes);
 
         if(uniqueTimes.size !== finalTimes.length){
-            await session.abortTransaction();
 
             return res.status(400).json({
                 success: false,
@@ -472,8 +400,6 @@ const updateMedicine = async (req, res) => {
 
         //validate scheduletypes
         if(!['daily', 'specific-days'].includes(finalScheduleType)){
-            await session.abortTransaction();
-
             return res.status(400).json({
                 success : false,
                 message : "Invalid schedule type."
@@ -487,10 +413,7 @@ const updateMedicine = async (req, res) => {
             finalDays = [];
         }
         else{
-
             if(!Array.isArray(finalDays) || finalDays.length === 0){
-                await session.abortTransaction();
-
                 return res.status(400).json({
                     success: false,
                     message: "Please select at least one weekday."
@@ -502,8 +425,6 @@ const updateMedicine = async (req, res) => {
             const uniqueDays = new Set(finalDays);
 
             if(uniqueDays.size !== finalDays.length){
-                await session.abortTransaction();
-
                 return res.status(400).json({
                     success : false,
                     message : "Duplicate weekdays are not allowed."
@@ -513,15 +434,12 @@ const updateMedicine = async (req, res) => {
             const inValidDay = finalDays.find(day => !validDays.includes(day));
 
             if(inValidDay){
-                await session.abortTransaction();
-
                 return res.status(400).json({
                     success: false,
                     message: `Invalid weekday: ${inValidDay}`
                 });
             }
         }
-
 
         //if treatment hasn't started yet then update current schedule
         const effectiveFrom = new Date(activeSchedule.effectiveFrom);
@@ -532,17 +450,16 @@ const updateMedicine = async (req, res) => {
             activeSchedule.scheduleType = finalScheduleType;
             activeSchedule.daysOfWeek = finalDays;
 
-            await activeSchedule.save({session});
-            await medicine.save({session});
+            await activeSchedule.save();
+            await medicine.save();
 
-            await session.commitTransaction();
-
-            res.status(200).json({
+            return res.status(200).json({
                 success : true,
                 message : "Medicine details are updated",
                 schedule : activeSchedule,
                 medicine
             });
+
         }
 
         //if treatment has started check if todays dose has been logged
@@ -551,7 +468,7 @@ const updateMedicine = async (req, res) => {
             user : req.user._id,
             medicine : medicine._id,
             scheduledDate : today,
-        }).session(session);
+        });
 
         //Effective dose
         const newEffectiveDate = new Date(today);
@@ -567,18 +484,16 @@ const updateMedicine = async (req, res) => {
 
         activeSchedule.effectiveUntil.setDate(activeSchedule.effectiveUntil.getDate() - 1);
 
-        await activeSchedule.save({session});
+        await activeSchedule.save();
 
         //create new Schedule vesrion
         const latestVesrion = await MedicineSchedule.findOne({
             medicine : medicine._id
-        }).sort({ version : -1}).session(session);
+        }).sort({ version : -1});
 
         const nextVersion = latestVesrion ? latestVesrion.version + 1 : 1;
 
-        const newSchedule = await MedicineSchedule.create(
-            [
-                {
+        const newSchedule = await MedicineSchedule.create({
                     user : req.user._id,
                     medicine : medicine._id,
                     times : sortedTimes,
@@ -588,38 +503,24 @@ const updateMedicine = async (req, res) => {
                     effectiveUntil : null,
                     isActive : true,
                     version : nextVersion
-                }
-            ],
-            {
-                session
-            }
-        );
+                });
 
-        await medicine.save({session});
-
-        await session.commitTransaction();
+        await medicine.save();
 
         res.status(200).json({
             success : true,
             message : todayLog ? "Medicine schedule updated. New schedule will start tomorrow." 
             : "Medicine schedule updated successfully.",
             medicine,
-            schedule : newSchedule[0]
+            schedule : newSchedule
         });
     }
     catch(err)
     {
-        await session.abortTransaction();
-        session.endSession();
-        
         res.status(500).json({
             success : false,
             message : err.message
         });
-    }
-    finally
-    {
-        session.endSession();
     }
 }
 
