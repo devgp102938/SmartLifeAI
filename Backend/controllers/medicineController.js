@@ -535,8 +535,12 @@ const deleteMedicine = async (req, res) => {
             });
         }
 
-        const medicine = await Medicine.findById(req.params.id);
-
+        const medicine = await Medicine.findOne({
+            _id : req.params.id,
+            user : req.user._id,
+            isDeleted : false
+        });
+        
         if(!medicine){
             return res.status(404).json({
                 success : false,
@@ -544,18 +548,28 @@ const deleteMedicine = async (req, res) => {
             });
         }
 
-        if(medicine.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
+        const activeSchedule = await MedicineSchedule.findOne({
+            user : req.user._id,
+            medicine : medicine._id,
+            isActive : true
+        }).sort({effectiveFrom: -1});
+
+        if(!activeSchedule){
+            return res.status(400).json({
                 success : false,
-                message : "Not authorized to access this medicine"
+                message : "Medicine is not active"
             });
         }
 
-        await MedicineLog.deleteMany({
-            medicine : medicine._id
-        });
+        const now = new Date();
 
-        await medicine.deleteOne();
+        medicine.isDeleted = true;
+        medicine.deletedAt = now;
+        activeSchedule.isActive = false;
+        activeSchedule.effectiveUntil = now;
+
+        await medicine.save();
+        await activeSchedule.save();
 
         res.status(200).json({
             success : true,
@@ -638,13 +652,13 @@ const takeDose = async (req, res) => {
         const endDate = new Date(medicine.endDate);
         endDate.setHours(0,0,0,0);
 
+        //chcek if in treatment period
         if(doseDate < startDate || doseDate > endDate){
             return res.status(400).json({
                 success: false,
                 message: "Scheduled date is outside the treatment period."
             });
         }
-
 
         //future validation
         const today = new Date();
