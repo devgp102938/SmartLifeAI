@@ -582,19 +582,16 @@ const takeDose = async (req, res) => {
             });
         }
 
-        const medicine = await Medicine.findById(req.params.id);
+        const medicine = await Medicine.findOne({
+            _id : req.params.id,
+            user : req.user.id,
+            isDeleted : false
+        })
 
         if(!medicine){
             return res.status(404).json({
                 success : false,
                 message : "Medicine not found"
-            });
-        }
-
-        if(medicine.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                success : false,
-                message : "Not authorized to access this medicine"
             });
         }
 
@@ -614,27 +611,26 @@ const takeDose = async (req, res) => {
             });
         }
 
-        const date = new Date(scheduledDate);
+        //validate times
+        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-        if(isNaN(date.getTime())){
+        if(!timeRegex.test(scheduledTime)){
+            return res.status(400).json({
+                success: false,
+                message: "Invalid time format. Use HH:mm."
+            });
+        }
+
+        //validate dates
+        const doseDate = new Date(scheduledDate);
+
+        if(isNaN(doseDate.getTime())){
             return res.status(400).json({
                 success : false,
                 message : "Invalid scheduledDate"
             });
         }
-
-        if(!medicine.times.includes(scheduledTime)){
-            return res.status(400).json({
-                success : false,
-                message : "Invalid scheduled time for this medicine"
-            });
-        }
-
-        const requestDate = new Date(scheduledDate);
-        requestDate.setHours(0,0,0,0);
-
-        const today = new Date();
-        today.setHours(0,0,0,0);
+        doseDate.setHours(0,0,0,0);
 
         const startDate = new Date(medicine.startDate);
         startDate.setHours(0,0,0,0);
@@ -642,17 +638,45 @@ const takeDose = async (req, res) => {
         const endDate = new Date(medicine.endDate);
         endDate.setHours(0,0,0,0);
 
-        if(requestDate > today){
+        if(doseDate < startDate || doseDate > endDate){
             return res.status(400).json({
                 success: false,
-                message: "Future doses cannot be logged"
-        });
+                message: "Scheduled date is outside the treatment period."
+            });
         }
 
-        if(requestDate < startDate || requestDate > endDate){
+
+        //future validation
+        const today = new Date();
+        const todayDate = new Date(today);
+        todayDate.setHours(0,0,0,0);
+
+        if(doseDate > todayDate){
+            return res.status(400).json({
+                success : false,
+                message : "Future doses cannot be logged."
+            });
+        }
+
+        const schedule = await MedicineSchedule.findOne({
+            medicine : medicine._id,
+            effectiveFrom : { $lte : doseDate },
+                $or : [
+                    {
+                        effectiveUntil : null
+                    },
+                    {
+                        effectiveUntil : { $gte : doseDate }
+                    }
+                ] 
+        }).sort({
+            effectiveFrom : -1
+        });
+
+        if(!schedule){
             return res.status(400).json({
                 success: false,
-                message: "Scheduled date is outside the medicine schedule"            
+                message: "No active schedule found for this date."
             });
         }
 
@@ -660,7 +684,7 @@ const takeDose = async (req, res) => {
 
             const weekDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-            const weekDay = weekDays[(requestDate.getDay() + 6) % 7];
+            const weekDay = weekDays[doseDate.getDay()];
 
             if(!medicine.daysOfWeek.includes(weekDay)){
                 return res.status(400).json({
@@ -670,10 +694,18 @@ const takeDose = async (req, res) => {
             }
         }
 
+        if(!medicine.times.includes(scheduledTime)){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid scheduled time for this medicine"
+            });
+        }
+
         const existingLog = await MedicineLog.findOne({
             user : req.user._id,
             medicine : medicine._id,
-            scheduledDate,
+            schedule : schedule._id,
+            scheduledDate : doseDate,
             scheduledTime
         });
 
@@ -687,6 +719,7 @@ const takeDose = async (req, res) => {
         const medicinelog = await MedicineLog.create({
             user : req.user._id,
             medicine : medicine._id,
+            schedule : schedule._id,
             scheduledDate,
             scheduledTime,
             status : "taken",
@@ -695,7 +728,7 @@ const takeDose = async (req, res) => {
 
         res.status(200).json({
             success : true,
-            message : "Medicine dose logged successfully",
+            message : "Medicine dose logged as taken successfully",
             medicinelog,
         });
     }
@@ -718,122 +751,157 @@ const skipDose = async (req, res) => {
                 message : "Invalid medicine ID"
             });
         }
-
-        const medicine = await Medicine.findById(req.params.id);
+        
+        const medicine = await Medicine.findOne({
+            _id : req.params.id,
+            user : req.user._id,
+            isDeleted : false
+        })
 
         if(!medicine){
             return res.status(404).json({
                 success : false,
                 message : "Medicine not found!"
             });
-        }
-
-        if(medicine.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                success : false,
-                message : "Not authorized to access this medicine"
-            });
-        }
+            }
 
         const {scheduledDate, scheduledTime} = req.body;
 
         if(!scheduledDate){
             return res.status(400).json({
                 success : false,
-                message : "scheduledDate is required"
+                message : "Schedule date is required"
             });
         }
 
         if(!scheduledTime){
             return res.status(400).json({
                 success : false,
-                message : "scheduledTime is required"
+                message : "Schedule time is required"
             });
         }
 
-        const date = new Date(scheduledDate);
+        //validate time format
+        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-        if(isNaN(date.getTime())){
+        if(!timeRegex.test(scheduledTime)){
             return res.status(400).json({
-                success : false,
-                message : "Invalid scheduledDate"
+                success: false,
+                message: "Invalid time format. Use HH:mm."
             });
         }
 
-        if(!medicine.times.includes(scheduledTime)){
+        //validate date
+        const doseDate = new Date(scheduledDate);
+
+        if(isNaN(doseDate.getTime())){
             return res.status(400).json({
-                success : false,
-                message : "Invalid scheduled time for this medicine"
+                success: false,
+                message: "Invalid scheduledDate"
             });
         }
 
-        const requestDate = new Date(scheduledDate);
-        requestDate.setHours(0,0,0,0);
+        doseDate.setHours(0,0,0,0);
 
-        const today = new Date();
-        today.setHours(0,0,0,0);
-
+        // Normalize medicine dates
         const startDate = new Date(medicine.startDate);
         startDate.setHours(0,0,0,0);
 
         const endDate = new Date(medicine.endDate);
         endDate.setHours(0,0,0,0);
 
-        if(requestDate > today){
-            return res.status(400).json({
-                success : false,
-                message : "Cant skip future dose"
-            })
-        }
-
-        if(requestDate < startDate || requestDate > endDate){
+        // Treatment period validation
+        if(doseDate < startDate || doseDate > endDate){
             return res.status(400).json({
                 success: false,
-                message: "Scheduled date is outside the medicine schedule"            
+                message: "Scheduled date is outside the treatment period."
             });
         }
 
-        if(medicine.scheduleType == "specific-days"){
+        // Future validation
+        const today = new Date();
+        const todayDate = new Date(today);
+        todayDate.setHours(0,0,0,0);
 
-            const weekDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        if(doseDate > todayDate){
+            return res.status(400).json({
+                success : false,
+                message : "Future doses cannot be logged."
+            });
+        }
 
-            const weekday = weekDays[(requestDate.getDay() + 6) % 7];
+        const schedule = await MedicineSchedule.findOne({
+            medicine : medicine._id,
+            effectiveFrom : { $lte : doseDate },
+            $or : [
+                {
+                    effectiveUntil : null
+                },
+                {
+                    effectiveUntil : { $gte : doseDate }
+                }
+            ]
+        }).sort({effectiveFrom : -1})
 
-            if(!medicine.daysOfWeek.includes(weekday)){
+        if(!schedule){
+            return res.status(404).json({
+                success : false,
+                message : "No dose log found for the specified date and time."
+            });
+        }
+
+        // Validate weekday
+        if(schedule.scheduleType === 'specific-days'){
+            const weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+
+            const weekday = weekdays[doseDate().getDay];
+
+            if(!schedule.daysOfWeek.includes(weekday)){
                 return res.status(400).json({
                     success: false,
-                    message: "Medicine is not scheduled for this weekday"
+                    message: "Medicine is not scheduled for this weekday."
                 });
             }
+        }
+
+        // Validate scheduled time
+        if(!schedule.times.includes(scheduledTime)){
+            return res.status(400).json({
+                success: false,
+                message: "Invalid scheduled time."
+            });
         }
 
         const existingLog = await MedicineLog.findOne({
             user : req.user._id,
             medicine : medicine._id,
-            scheduledDate,
+            schedule : schedule._id,
+            scheduledDate : doseDate,
             scheduledTime
         });
 
         if(existingLog){
             return res.status(400).json({
-                success : false,
-                message : "Dose has already been logged" 
+                success: false,
+                message: "Dose has already been logged."
             })
         }
 
         const medicinelog = await MedicineLog.create({
             user : req.user._id,
             medicine : medicine._id,
-            scheduledDate,
+            schedule : schedule._id,
+            scheduledDate : doseDate,
             scheduledTime,
-            status : "skipped"
+            status : "skipped",
+            takenAt : Date.now()
         });
 
-        res.status(201).json({
+        res.status(200).json({
             success : true,
-            message : "medicine has logged as skipped",
-            medicinelog
-        });
+            message : "Medicine marked as Skipped.",
+            medicineLog
+        })
     }
     catch(err)
     {
