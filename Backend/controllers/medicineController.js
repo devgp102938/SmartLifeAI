@@ -584,7 +584,7 @@ const takeDose = async (req, res) => {
 
         const medicine = await Medicine.findOne({
             _id : req.params.id,
-            user : req.user.id,
+            user : req.user._id,
             isDeleted : false
         })
 
@@ -658,6 +658,21 @@ const takeDose = async (req, res) => {
             });
         }
 
+        //Prevent logging today's future time
+        if(doseDate.getTime() === todayDate.getTime()){
+            const [hour, minute] = scheduledTime.split(":").map(Number);
+
+            const scheduleDateTime = new Date();
+            scheduleDateTime.setHours(hour, minute, 0, 0);
+
+            if(scheduleDateTime > today){
+                return res.status(400).json({
+                    success: false,
+                    message: "Cannot log a dose before its scheduled time."
+                });
+            }
+        }
+
         const schedule = await MedicineSchedule.findOne({
             medicine : medicine._id,
             effectiveFrom : { $lte : doseDate },
@@ -680,13 +695,13 @@ const takeDose = async (req, res) => {
             });
         }
 
-        if(medicine.scheduleType == "specific-days"){
+        if(schedule.scheduleType === "specific-days"){
 
             const weekDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-            const weekDay = weekDays[doseDate.getDay()];
+            const weekDay = weekDays[(doseDate.getDay() + 6) % 7];
 
-            if(!medicine.daysOfWeek.includes(weekDay)){
+            if(!schedule.daysOfWeek.includes(weekDay)){
                 return res.status(400).json({
                     success: false,
                     message: "Medicine is not scheduled for this weekday"
@@ -694,7 +709,7 @@ const takeDose = async (req, res) => {
             }
         }
 
-        if(!medicine.times.includes(scheduledTime)){
+        if(!schedule.times.includes(scheduledTime)){
             return res.status(400).json({
                 success : false,
                 message : "Invalid scheduled time for this medicine"
@@ -716,20 +731,20 @@ const takeDose = async (req, res) => {
             });
         }
 
-        const medicinelog = await MedicineLog.create({
+        const medicineLog = await MedicineLog.create({
             user : req.user._id,
             medicine : medicine._id,
             schedule : schedule._id,
-            scheduledDate,
+            scheduledDate : doseDate,
             scheduledTime,
             status : "taken",
-            takenAt : Date.now()
+            takenAt : new Date()
         });
 
-        res.status(200).json({
+        res.status(201).json({
             success : true,
             message : "Medicine dose logged as taken successfully",
-            medicinelog,
+            medicineLog,
         });
     }
     catch(err)
@@ -830,6 +845,21 @@ const skipDose = async (req, res) => {
             });
         }
 
+        //Prevent logging today's future time
+        if(doseDate.getTime() === todayDate.getTime()){
+            const [hour, minute] = scheduledTime.split(":").map(Number);
+
+            const scheduleDateTime = new Date();
+            scheduleDateTime.setHours(hour, minute, 0, 0);
+
+            if(scheduleDateTime > today){
+                return res.status(400).json({
+                    success : false,
+                    message : "Cannot log a dose before its scheduled time."
+                });
+            }
+        }
+
         const schedule = await MedicineSchedule.findOne({
             medicine : medicine._id,
             effectiveFrom : { $lte : doseDate },
@@ -846,15 +876,15 @@ const skipDose = async (req, res) => {
         if(!schedule){
             return res.status(404).json({
                 success : false,
-                message : "No dose log found for the specified date and time."
+                message : "No active schedule found for this date."
             });
         }
 
         // Validate weekday
         if(schedule.scheduleType === 'specific-days'){
-            const weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+            const weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-            const weekday = weekdays[doseDate().getDay];
+            const weekday = weekdays[(doseDate.getDay() + 6) % 7];
 
             if(!schedule.daysOfWeek.includes(weekday)){
                 return res.status(400).json({
@@ -887,17 +917,16 @@ const skipDose = async (req, res) => {
             })
         }
 
-        const medicinelog = await MedicineLog.create({
+        const medicineLog = await MedicineLog.create({
             user : req.user._id,
             medicine : medicine._id,
             schedule : schedule._id,
             scheduledDate : doseDate,
             scheduledTime,
-            status : "skipped",
-            takenAt : Date.now()
+            status : "skipped"
         });
 
-        res.status(200).json({
+        res.status(201).json({
             success : true,
             message : "Medicine marked as Skipped.",
             medicineLog
