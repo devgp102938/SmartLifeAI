@@ -171,7 +171,10 @@ const createMedicine = async (req, res) => {
 const getMedicine = async (req, res) => {
     try
     {
-        const medicine = await Medicine.find({user : req.user._id}).sort({createdAt : -1});
+        const medicine = await Medicine.find({
+            user : req.user._id,
+            isDeleted : false
+        }).sort({createdAt : -1});
 
         if(!medicine){
             return res.status(404).json({
@@ -966,19 +969,16 @@ const undoDoseAction = async (req, res) => {
             });
         }
         
-        const medicine = await Medicine.findById(req.params.id);
+        const medicine = await Medicine.findOne({
+            _id : req.params._id,
+            user : req.user._id,
+            isDeleted : false
+        })
 
         if(!medicine){
             return res.status(404).json({
                 success : false,
                 message : "Medicine not found!"
-            });
-            }
-
-        if(medicine.user.toString() !== req.user._id.toString()){
-            return res.status(403).json({
-                success : false,
-                message : "Not authorized to access this medicine"
             });
         }
 
@@ -991,14 +991,6 @@ const undoDoseAction = async (req, res) => {
             });
         }
 
-        const date = new Date(scheduledDate);
-        if(Number.isNaN(date.getTime())){
-            return res.status(400).json({
-                success: false,
-                message: "Invalid scheduledDate."
-            });
-        }
-
         if(!scheduledTime){
             return res.status(400).json({
                 success : false,
@@ -1006,12 +998,30 @@ const undoDoseAction = async (req, res) => {
             });
         }
 
-        if(!medicine.times.includes(scheduledTime)){
+        //validate time format
+        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+        if(!timeRegex.test(scheduledTime)){
             return res.status(400).json({
                 success: false,
-                message: "Invalid scheduled time."
+                message: "Invalid time format. Use HH:mm."
             });
         }
+
+        //validate date
+        const doseDate = new Date(scheduledDate);
+
+        if(isNaN(doseDate.getTime())){
+            return res.status(400).json({
+                success : false,
+                message : "Invalid scheduledDate"
+            });
+        }
+
+        doseDate.setHours(0,0,0,0);
+
+        //fetch schedule
+        const schedule = await MedicineSchedule.findOne()
 
         const medicinelog = await MedicineLog.findOne({
             user : req.user._id,
