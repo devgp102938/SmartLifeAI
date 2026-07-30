@@ -78,6 +78,13 @@ const getHabits = async (req, res) => {
             user : req.user._id,
             isDeleted : false
         }).sort({startDate : 1});
+
+        if(!habits.length){
+            return res.status(404).json({
+                success : false,
+                message : "No Habits Found"
+            })
+        }
         
         const now = new Date();
         now.setHours(0,0,0,0);

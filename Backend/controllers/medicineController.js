@@ -118,7 +118,7 @@ const createMedicine = async (req, res) => {
             if(InValid){
                 return res.status(400).json({
                     success : false,
-                    message : `Invalid day ${InValid}`
+                    message : `"${InValid}" is not in Schedule`
                 });
             }
 
@@ -175,13 +175,6 @@ const getMedicine = async (req, res) => {
             user : req.user._id,
             isDeleted : false
         }).sort({createdAt : -1});
-
-        if(!medicine){
-            return res.status(404).json({
-                success : false,
-                message : "Medicine not found"
-            });
-        }
 
         res.status(200).json({
             success : true,
@@ -970,7 +963,7 @@ const undoDoseAction = async (req, res) => {
         }
         
         const medicine = await Medicine.findOne({
-            _id : req.params._id,
+            _id : req.params.id,
             user : req.user._id,
             isDeleted : false
         })
@@ -1021,23 +1014,42 @@ const undoDoseAction = async (req, res) => {
         doseDate.setHours(0,0,0,0);
 
         //fetch schedule
-        const schedule = await MedicineSchedule.findOne()
+        const schedule = await MedicineSchedule.findOne({
+            medicine : medicine._id,
+            effectiveFrom : { $lte : doseDate },
+            $or : [
+                {
+                    effectiveUntil : null
+                },
+                {
+                    effectiveUntil : { $gte : doseDate }
+                }
+            ]
+        }).sort({effectiveFrom : -1});
 
-        const medicinelog = await MedicineLog.findOne({
+        if(!schedule){
+            return res.status(400).json({
+                success : false,
+                message : "No schedule found"
+            })
+        }
+
+        const medicineLog = await MedicineLog.findOne({
             user : req.user._id,
             medicine : medicine._id,
-            scheduledDate,
+            schedule : schedule._id,
+            scheduledDate : doseDate,
             scheduledTime
         });
 
-        if(!medicinelog){
+        if(!medicineLog){
             return res.status(404).json({
                 success : false,
                 message : "No dose log found for the specified date and time."
             });
         }
 
-        await medicinelog.deleteOne();
+        await medicineLog.deleteOne();
 
         res.status(200).json({
             success : true,

@@ -141,6 +141,13 @@ const getDailyCheckIn = async (req, res) => {
         .skip(skip)
         .limit(cappedLimit)
 
+        if(!checkIns.length){
+            return res.status(404).json({
+                success : false,
+                message : "No Check-Ins Found"
+            })
+        }
+
         const totalCheckIns = await DailyCheckIn.countDocuments({
             user : req.user._id
         });

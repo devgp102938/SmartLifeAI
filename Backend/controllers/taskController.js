@@ -64,6 +64,13 @@ const getTasks = async (req, res) => {
             isDeleted : false
         }).sort({dueDate : 1}); //Duedate 1 sort tasks in  soonest-due tasks order 
 
+        if(!tasks.length){
+            return res.status(404).json({
+                success : false,
+                message : "No Tasks Found"
+            });
+        }
+
         res.status(200).json({
             success : true,
             tasks,
