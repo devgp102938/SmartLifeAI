@@ -347,6 +347,11 @@ const updateMedicine = async (req, res) => {
                             daysOfWeek !== undefined;
 
         if(!scheduleChange){
+            if(startDate !== undefined && !treatmentStarted){
+                activeSchedule.effectiveFrom = medicine.startDate;
+                await activeSchedule.save();
+            }
+
             await medicine.save();
 
             return res.status(200).json({
@@ -483,11 +488,11 @@ const updateMedicine = async (req, res) => {
         await activeSchedule.save();
 
         //create new Schedule vesrion
-        const latestVesrion = await MedicineSchedule.findOne({
+        const latestVersion  = await MedicineSchedule.findOne({
             medicine : medicine._id
         }).sort({ version : -1});
 
-        const nextVersion = latestVesrion ? latestVesrion.version + 1 : 1;
+        const nextVersion = latestVersion  ? latestVersion .version + 1 : 1;
 
         const newSchedule = await MedicineSchedule.create({
                     user : req.user._id,
@@ -500,7 +505,6 @@ const updateMedicine = async (req, res) => {
                     isActive : true,
                     version : nextVersion
                 });
-
         await medicine.save();
 
         res.status(200).json({
@@ -606,7 +610,6 @@ const takeDose = async (req, res) => {
         }
 
         const {scheduledDate, scheduledTime} = req.body;
-
         if(!scheduledDate){
             return res.status(400).json({
                 success : false,
@@ -675,7 +678,7 @@ const takeDose = async (req, res) => {
             const scheduleDateTime = new Date();
             scheduleDateTime.setHours(hour, minute, 0, 0);
 
-            if(scheduleDateTime > today){
+            if(scheduleDateTime.getTime() > today.getTime()){
                 return res.status(400).json({
                     success: false,
                     message: "Cannot log a dose before its scheduled time."
@@ -718,7 +721,7 @@ const takeDose = async (req, res) => {
                 });
             }
         }
-
+        
         if(!schedule.times.includes(scheduledTime)){
             return res.status(400).json({
                 success : false,
