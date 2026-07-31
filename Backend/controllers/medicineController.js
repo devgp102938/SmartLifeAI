@@ -687,6 +687,7 @@ const takeDose = async (req, res) => {
         }
 
         const schedule = await MedicineSchedule.findOne({
+            user : req.user._id,
             medicine : medicine._id,
             effectiveFrom : { $lte : doseDate },
                 $or : [
@@ -874,6 +875,7 @@ const skipDose = async (req, res) => {
         }
 
         const schedule = await MedicineSchedule.findOne({
+            user : req.user._id,
             medicine : medicine._id,
             effectiveFrom : { $lte : doseDate },
             $or : [
@@ -1018,6 +1020,7 @@ const undoDoseAction = async (req, res) => {
 
         //fetch schedule
         const schedule = await MedicineSchedule.findOne({
+            user : req.user._id,
             medicine : medicine._id,
             effectiveFrom : { $lte : doseDate },
             $or : [
