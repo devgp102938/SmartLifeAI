@@ -67,12 +67,36 @@ const createDailyCheckIn = async (req, res) => {
         }
 
         //check for existing daily check in 
-        const existingCheckIn = await DailyCheckIn.findOne({user : req.user._id, date});
+        const existingCheckIn = await DailyCheckIn.findOne({
+            user : req.user._id,
+            date,
+        });
 
-        if(existingCheckIn){
+        //Active document exists
+        if(existingCheckIn && !existingCheckIn.isDeleted){
             return res.status(409).json({
-                success: false,
-                message: "You have already submitted a check-in for this date."
+                success : false,
+                message : "You have already submitted a check-in for this date."
+            })
+        }
+
+        //restoring deleted checkin
+        if(existingCheckIn && existingCheckIn.isDeleted){
+            existingCheckIn.moodScore = moodScore;
+            existingCheckIn.mood = mood;
+            existingCheckIn.energy = energy;
+            existingCheckIn.productivity = productivity;
+            existingCheckIn.reflection = reflection;
+
+            existingCheckIn.isDeleted = false;
+            existingCheckIn.deletedAt = null;
+
+            await existingCheckIn.save();
+
+            return res.status(200).json({
+                success: true,
+                message: "Daily check-in restored successfully.",
+                checkIn: existingCheckIn
             });
         }
 
@@ -135,7 +159,8 @@ const getDailyCheckIn = async (req, res) => {
         const skip = (page - 1) * cappedLimit;
 
         const checkIns = await DailyCheckIn.find({
-            user : req.user._id
+            user : req.user._id,
+            isDeleted : false
         })
         .sort({ date : -1 })
         .skip(skip)
@@ -149,7 +174,8 @@ const getDailyCheckIn = async (req, res) => {
         }
 
         const totalCheckIns = await DailyCheckIn.countDocuments({
-            user : req.user._id
+            user : req.user._id,
+            isDeleted : false
         });
 
         const totalPages = Math.ceil( totalCheckIns / cappedLimit );
@@ -208,6 +234,7 @@ const getDailyCheckInByDate = async (req, res) => {
         const checkIn = await DailyCheckIn.findOne({
             user : req.user._id,
             date,
+            isDeleted: false
         });
 
         if(!checkIn){
@@ -304,7 +331,8 @@ const updateDailyCheckIn = async (req, res) => {
         //find authenticated users data 
         const checkIn = await DailyCheckIn.findOne({
             user :req.user._id,
-            date
+            date,
+            isDeleted : false
         });
 
         if(!checkIn){ //check if user exists
@@ -411,7 +439,8 @@ const deleteDailyCheckIn = async (req, res) => {
 
         const checkIn = await DailyCheckIn.findOne({
             user : req.user._id,
-            date
+            date,
+            isDeleted : false
         });
 
         if(!checkIn){
@@ -421,7 +450,10 @@ const deleteDailyCheckIn = async (req, res) => {
             });
         }
 
-        await checkIn.deleteOne();
+        checkIn.isDeleted = true;
+        checkIn.deletedAt = new Date();
+
+        await checkIn.save();
 
         res.status(200).json({
             success : true,

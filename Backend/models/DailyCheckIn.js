@@ -73,6 +73,16 @@ const dailyCheckinSchema = new mongoose.Schema({
         trim : true,
         default : "",
         maxlength : 1000
+    },
+
+    isDeleted : {
+        type : Boolean,
+        default : false
+    },
+
+    deletedAt : {
+        type : Date,
+        default : null
     }
 },
 {
