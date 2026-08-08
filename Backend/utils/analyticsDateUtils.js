@@ -7,13 +7,26 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(isoWeek);
 
+// Custom validation AnalyticsValidationError for analytics-related input validation.
+// This allows AnalyticsValidationError middleware to distinguish validation AnalyticsValidationErrors from database AnalyticsValidationErrors and unexpected AnalyticsValidationErrors.
+
+class AnalyticsValidationError extends Error{
+    constructor(message){
+        super(message);
+        this.name = 'AnalyticsValidationError';
+
+        if(AnalyticsValidationError.captureStackTrace){
+            Error.captureStackTrace(this, AnalyticsValidationError);
+        }
+    }
+}
 
 
 //   This is the single source of truth for valid period identifiers —
 //   analyticsService and any controller-level validation should import
 //   this rather than hardcoding strings.
 
-const PERIODS = {
+const PERIODS = Object.freeze({
     TODAY : 'today',
     YESTERDAY : 'yesterday',
     LAST_7_DAYS : 'last7days',
@@ -26,7 +39,10 @@ const PERIODS = {
     THIS_YEAR : 'thisYear',
     CUSTOM : 'custom',
     LIFETIME : 'lifetime'
-}
+});
+
+//Set used for efficient period validation.
+const VALID_PERIODS = new Set(Object.values(PERIODS));
 
 //A sentinel start date for "lifetime" queries — far enough back to be safe.
 const LIFETIME_START = '1970-01-01T00:00:00.000Z';
@@ -48,18 +64,30 @@ const isValidTimezone = (tz) => {
     }
 }
 
+/** * Throws AnalyticsValidationError when timezone is missing or invalid. 
+ * @param {string} tz 
+ * @throws {AnalyticsValidationError} 
+ */
+
 //if timezone is missing or invalid
 const assertValidTimezone = (tz) => {
     if(!tz){
-        throw new Error("Timezone is required");
+        throw new AnalyticsValidationError("Timezone is required");
     }
 
     if(!isValidTimezone(tz)){
-        throw new Error(`Invalid timezone: ${tz}`);
+        throw new AnalyticsValidationError(`Invalid timezone: ${tz}`);
     }
 }
 
-//internal helper for rolling n-days range(ex. last 7 days, last 30 days)
+/** * Internal helper for rolling N-day analytics ranges. 
+* Examples: * - Last 7 days * - Last 30 days * - Last 90 days *
+* @param {dayjs.Dayjs} now 
+  @param {string} tz 
+  @param {number} numberOfDays 
+  @returns {{ * startDate: Date, * endDate: Date * }}
+**/
+
 const getRollingDaysRange = (now, tz, numberOfDays) => {
     const start = now.subtract(numberOfDays - 1, 'day').toDate();
     return{
@@ -71,41 +99,63 @@ const getRollingDaysRange = (now, tz, numberOfDays) => {
 //                      ##Public APIS##
 
 
-//return utc date of start date
+/** * Returns the UTC start-of-day boundary for a date * in the supplied timezone. 
+ * @param {Date|string|number} [date=new Date()] * @param {string} timezone 
+ * @returns {Date} * * @example * getStartOfDay(new Date(), 'Asia/Kolkata'); 
+ */
+
 const getStartOfDay = (date = new Date(), timezone) => {
     assertValidTimezone(timezone);
 
     return dayjs(date).tz(timezone).startOf('day').utc().toDate();
 }
 
-//return utc end date
+/** * Returns the UTC end-of-day boundary for a date * in the supplied timezone. 
+ * @param {Date|string|number} [date=new Date()] * @param {string} timezone 
+ * @returns {Date} 
+ * @example 
+ * getEndOfDay(new Date(), 'Asia/Kolkata');
+ *  */
+
 const getEndOfDay = (date = new Date(), timezone) => {
     assertValidTimezone(timezone);
 
     return dayjs(date).tz(timezone).endOf('day').utc().toDate();
 }
 
+
+/** * Validates and converts a custom analytics date range * into UTC boundaries. 
+ * Important: * dayjs.tz(value, timezone) is used so the input is parsed 
+ * directly inside the requested timezone. 
+ *  @param {Object} options 
+ *  @param {string|Date} options.customStart 
+ *  @param {string|Date} options.customEnd 
+ *  @param {string} options.timezone 
+ *  @returns {{ * startDate: Date, * endDate: Date * }} 
+ *  @throws {AnalyticsValidationError} */
+
+
 const validateCustomRange = ({customStart, customEnd, timezone : tz}) =>{
     assertValidTimezone(tz);
 
     if(!customStart || !customEnd){
-        throw new Error('validateCustomRange: customStart and customEnd are both required');
+        throw new AnalyticsValidationError('validateCustomRange: customStart and customEnd are both required');
     }
 
-    const start = dayjs(customStart).tz(tz).startOf('day');
-    const end = dayjs(customEnd).tz(tz).endOf('day');
+    const start = dayjs.tz(customStart, tz).startOf('day');
+    const end = dayjs.tz(customEnd, tz).endOf('day');
 
     if(!start.isValid() || !end.isValid()){
-        throw new Error('validateCustomRange: customStart or customEnd is not a valid date');
+        throw new AnalyticsValidationError('validateCustomRange: customStart or customEnd is not a valid date');
     }
 
     if(start.isAfter(end)){
-        throw new Error('validateCustomRange: customStart must be before or equal to customEnd');
+        throw new AnalyticsValidationError('validateCustomRange: customStart must be before or equal to customEnd');
     }
 
     const rangeInDays = end.diff(start, 'day') + 1;
     if(rangeInDays > MAX_CUSTOM_RANGE){
-        throw new Error(`validateCustomRange: range exceeds maximum of ${MAX_CUSTOM_RANGE} days`);
+        throw new AnalyticsValidationError(`validateCustomRange: range exceeds maximum of ${MAX_CUSTOM_RANGE} days`);
     }
 
     return{
@@ -114,90 +164,184 @@ const validateCustomRange = ({customStart, customEnd, timezone : tz}) =>{
     }
 }
 
+/** * Returns UTC boundaries for the requested analytics period. 
+ * @param {Object} options 
+ * @param {string} options.period 
+ * @param {string} options.timezone 
+ * @param {Date} [options.referenceDate]
+ * @param {string|Date} [options.customStart] 
+ * @param {string|Date} [options.customEnd] 
+ * @returns {{ * period: string, * timezone: string, * startDate: Date, * endDate: Date * }} 
+ * @throws {AnalyticsValidationError} 
+ * @example  getDateRange({ * period: PERIODS.LAST_30_DAYS, * timezone: 'Asia/Kolkata' * }); */
+
 const getDateRange = ({period, timezone : tz, referenceDate = new Date(), customStart, customEnd}) => {
     assertValidTimezone(tz);
 
-    if(!Object.values(PERIODS).includes(period)){
-        throw new Error(`getDateRange: unsupported period "${period}"`);
+    if(!VALID_PERIODS.has(period)){
+        throw new AnalyticsValidationError(`getDateRange: unsupported period "${period}"`);
     }
 
     const now = dayjs(referenceDate).tz(tz);
 
+    const metadata = {
+        period,
+        timezone : tz
+    }
+
     switch(period){
 
-        case PERIODS.TODAY:
+        case PERIODS.TODAY:{
             return{
+                ...metadata,
+
                 startDate : getStartOfDay(referenceDate, tz),
                 endDate : getEndOfDay(referenceDate, tz)
             };
+        }
 
-        case PERIODS.YESTERDAY:
+        case PERIODS.YESTERDAY:{
             const yesterday = now.subtract(1, 'day').toDate();
             return{
+                ...metadata,
+
                 startDate : getStartOfDay(yesterday, tz),
                 endDate : getEndOfDay(yesterday, tz)
             };
+        }
 
-        //rolling periods : always n days ending
-        case PERIODS.LAST_7_DAYS:
-            return getRollingDaysRange(now, tz, 7);
+        //rolling periods : always n days ending  //last 7 days including today
+        case PERIODS.LAST_7_DAYS: {
+            return {
+                ...metadata,
 
-        case PERIODS.LAST_30_DAYS:
-            return getRollingDaysRange(now, tz, 30);
- 
-        case PERIODS.LAST_90_DAYS:
-            return getRollingDaysRange(now, tz, 90); 
+                ...getRollingDaysRange(now, tz, 7)
+            }
+        }
+        //last 30 days including today
+        case PERIODS.LAST_30_DAYS: { 
+            return {
+                ...metadata,
+
+                ...getRollingDaysRange(now, tz, 30)
+            }
+        }
+        //last 90 days including today
+        case PERIODS.LAST_90_DAYS: {
+            return {
+                ...metadata,
+
+                ...getRollingDaysRange(now, tz, 90) 
+            }
+        }
         
         //calender periods fixed boundries
-        case PERIODS.THIS_WEEK:
+        case PERIODS.THIS_WEEK: {
             return{
+                ...metadata,
+
                 startDate : now.startOf('isoWeek').utc().toDate(),
                 endDate : getEndOfDay(referenceDate, tz)
             };
-        case PERIODS.LAST_WEEK:
+        }
+
+        case PERIODS.LAST_WEEK: {
             const lastWeek = now.subtract(1, 'week');
             return{
+                ...metadata,
+
                 startDate : lastWeek.startOf('isoWeek').utc().toDate(),
                 endDate : lastWeek.endOf('isoWeek').utc().toDate()
             };
-        case PERIODS.THIS_MONTH:
+        }
+
+        case PERIODS.THIS_MONTH: {
             return{
+                ...metadata,
+
                 startDate : now.startOf('month').utc().toDate(),
                 endDate : getEndOfDay(referenceDate, tz)
             };
-        case PERIODS.LAST_MONTH:
+        }
+
+        case PERIODS.LAST_MONTH: {
             const lastMonth = now.subtract(1, 'month');
             return{
+                ...metadata,
+
                 startDate : lastMonth.startOf('month').utc().toDate(),
                 endDate : lastMonth.endOf('month').utc().toDate()
             };
-        case PERIODS.THIS_YEAR:
+        }
+
+        case PERIODS.THIS_YEAR: {
             return{
+                ...metadata,
+
                 startDate : now.startOf('year').utc().toDate(),
                 endDate : getEndOfDay(referenceDate, tz)
             };
-        case PERIODS.LIFETIME:
+        }
+
+        case PERIODS.LIFETIME: {
             return{
+                ...metadata,
+
                 startDate : new Date(LIFETIME_START),
                 endDate : getEndOfDay(referenceDate, tz)
             }
-        case PERIODS.CUSTOM:
-            return validateCustomRange({customStart, customEnd, timezone : tz});
+        }
 
-        default:
-            throw new Error(`getDateRange: unhandled period "${period}"`)
+        case PERIODS.CUSTOM: {
+            const range = validateCustomRange({
+                customStart, customEnd, timezone : tz
+            });
+
+            return {
+                ...metadata,
+                ...range
+            }
+        }
+
+        default: {
+            throw new AnalyticsValidationError(`getDateRange: unhandled period "${period}"`)
+        }
+            
     }
 }
 
-const getPreviousPeriod = ({startDate, endDate, timezone : tz}) => {
+
+/** * Returns the previous equivalent date range. This does NOT mean the previous calendar period. 
+ * Example: Current:  August 1 - August 4 
+ * Previous equivalent:  July 28 - July 31 
+ * This is useful for dashboard comparisons where 
+ * the previous range should have the same number of days. 
+ * @param {Object} options 
+ * @param {Date|string} options.startDate 
+ * @param {Date|string} options.endDate 
+ * @param {string} options.timezone
+ * @returns {{ * startDate: Date, * endDate: Date * }} 
+ * @throws {AnalyticsValidationError}
+ *  */
+
+
+const getPreviousEquivalentRange = ({startDate, endDate, timezone : tz}) => {
     assertValidTimezone(tz);
 
     if (!startDate || !endDate) {
-        throw new Error('getPreviousPeriod: startDate and endDate are required');
+        throw new AnalyticsValidationError('getPreviousEquivalentRange: startDate and endDate are required');
     }
 
     const start = dayjs(startDate).utc().tz(tz);
     const end = dayjs(endDate).utc().tz(tz);
+
+    if(!start.isValid() || !end.isValid()){
+        throw new AnalyticsValidationError('getPreviousEquivalentRange: startDate or endDate is not a valid date');
+    }
+
+    if(start.isAfter(end)){
+        throw new AnalyticsValidationError('getPreviousEquivalentRange: startDate must be before or equal to endDate');
+    }
 
     const durationInDays = end.diff(start, 'day') + 1;
 
@@ -212,10 +356,14 @@ const getPreviousPeriod = ({startDate, endDate, timezone : tz}) => {
 
 module.exports = {
     PERIODS,
+    VALID_PERIODS,
+    MAX_CUSTOM_RANGE,
+    AnalyticsValidationError,
+
     getStartOfDay,
     getEndOfDay,
     getDateRange,
     validateCustomRange,
-    getPreviousPeriod
+    getPreviousEquivalentRange
 }
 
