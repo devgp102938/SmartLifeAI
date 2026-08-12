@@ -359,6 +359,7 @@ module.exports = {
     VALID_PERIODS,
     MAX_CUSTOM_RANGE,
     AnalyticsValidationError,
+    assertValidTimezone,
 
     getStartOfDay,
     getEndOfDay,
