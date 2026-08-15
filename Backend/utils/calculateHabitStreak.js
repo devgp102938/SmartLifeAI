@@ -177,4 +177,9 @@ function calculateHabitStreak({
     return {currentStreak, longestStreak};
 }
 
-module.exports = {calculateHabitStreak};
+module.exports = {
+    calculateHabitStreak,
+    normalizeDate,
+    addDays,
+    enumerateDays
+};
