@@ -48,24 +48,46 @@
  * calendar-day string 'YYYY-MM-DD', evaluated in the given IANA timezone.
  */
 
-function normalizeDate(input, timezone){
-    if(input === null || input === undefined){ return null; }
+function normalizeDate(input, timezone) {
+    if (input === null || input === undefined) {
+        return null;
+    }
 
-    if(typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)){
+    // Plain YYYY-MM-DD must be validated as a calendar date.
+    // Do NOT let JavaScript silently normalize values such as
+    // 2026-02-31 into another date.
+    if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
+        const [year, month, day] = input.split('-').map(Number);
+
+        const utcDate = new Date(Date.UTC(year, month - 1, day));
+
+        const isValidCalendarDate =
+            utcDate.getUTCFullYear() === year &&
+            utcDate.getUTCMonth() === month - 1 &&
+            utcDate.getUTCDate() === day;
+
+        if (!isValidCalendarDate) {
+            throw new Error(
+                `calculateMedicineCompliance: invalid date "${input}"`
+            );
+        }
+
         return input;
     }
 
     const date = input instanceof Date ? input : new Date(input);
 
-    if(Number.isNaN(date.getTime())){
-        throw new Error(`calculateMedicineCompliance: invalid date "${input}"`);
+    if (Number.isNaN(date.getTime())) {
+        throw new Error(
+            `calculateMedicineCompliance: invalid date "${input}"`
+        );
     }
 
     const formatter = new Intl.DateTimeFormat('en-CA', {
-        timeZone : timezone,
-        year : 'numeric',
-        month : '2-digit',
-        day : '2-digit'
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
     });
 
     return formatter.format(date);
@@ -357,6 +379,10 @@ function calculateMedicineCompliance({medicines, schedules, logs, periodStart, p
 
     if(!periodStartStr || !periodEndStr){
         throw new Error(`calculateMedicineCompliance : periodStart and periodEnd are required`);
+    }
+
+    if(periodStartStr > periodEndStr){
+        throw new Error(`calculateMedicineCompliance : periodStart must be on or before periodEnd`)
     }
 
     // Normalize medicines once, up front — every downstream helper works
