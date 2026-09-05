@@ -140,8 +140,17 @@ const getAnalytics = async ({userId, period, timezone, customStart, customEnd, n
         return {
             habitId : habit._id,
             ...streak
-        }
-    })
+        };
+    });
+
+    return {
+        period : {
+            start : context.startDate,
+            end : context.endDate
+        },
+
+        habit : habitAnalytics
+    };
 
     const medicines = await Medicine.find({
         user: userId
@@ -158,4 +167,8 @@ const getAnalytics = async ({userId, period, timezone, customStart, customEnd, n
     const checkIns = await DailyCheckIn.find({
         user: userId
     });
-}
+};
+
+module.exports = {
+    getAnalytics
+};
