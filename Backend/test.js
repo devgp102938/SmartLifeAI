@@ -1,4 +1,3 @@
-
 /**
  * testDailyCheckIn.js
  *
