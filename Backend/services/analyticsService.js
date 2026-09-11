@@ -130,7 +130,7 @@ const getAnalytics = async ({userId, period, timezone, customStart, customEnd, n
         }
 
         const streak = calculateHabitStreak({
-            habitStartDate : habit.startDate,
+            habitStartDate : habit.startDate
             habitEndDate : effectiveEndDate,
             completionDates,
             today : context.now,
