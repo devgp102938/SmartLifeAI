@@ -134,7 +134,7 @@ const getAnalytics = async ({userId, period, timezone, customStart, customEnd, n
             habitEndDate : effectiveEndDate,
             completionDates,
             today : context.now,
-            timezone : context.timezone
+            timezone : context.timezon
         });
 
         return {
