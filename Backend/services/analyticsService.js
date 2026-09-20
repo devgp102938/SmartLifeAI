@@ -16,13 +16,13 @@ const HabitHistory = require('../models/HabitHistory.js');
 
 const Medicine = require('../models/Medicine.js');
 const MedicineSchedule = require('../models/MedicineSchedule.js');
-const MecineLog = require('../models/MedicineLog.js');
+const MedicineLog = require('../models/MedicineLog.js');
 
 const DailyCheckIn = require('../models/DailyCheckIn.js');
 
 const {
     getDateRange,
-    PERIODs,
+    PERIODS,
     VALID_PERIODS
 } = require('../utils/analyticsDateUtils.js');
 
@@ -107,7 +107,9 @@ const getAnalytics = async ({userId, period, timezone, customStart, customEnd, n
             );
         });
 
-        const completionDates = history.map((entry) => (entry.date).filter(Boolean));
+        const completionDates = history
+            .map((entry) => entry.date)
+            .filter(Boolean);
 
         // Respect deletion boundary.
         // A deleted habit should remain available for historical 
@@ -143,15 +145,6 @@ const getAnalytics = async ({userId, period, timezone, customStart, customEnd, n
         };
     });
 
-    return {
-        period : {
-            start : context.startDate,
-            end : context.endDate
-        },
-
-        habit : habitAnalytics
-    };
-
     const medicines = await Medicine.find({
         user: userId
     });
@@ -161,12 +154,20 @@ const getAnalytics = async ({userId, period, timezone, customStart, customEnd, n
     });
 
     const logs = await MedicineLog.find({
-        user: userId
-    });
-
+        user : userId
+    })
     const checkIns = await DailyCheckIn.find({
         user: userId
     });
+
+    return {
+        period : {
+            start : context.startDate,
+            end : context.endDate
+        },
+
+        habit : habitAnalytics
+    };
 };
 
 module.exports = {
