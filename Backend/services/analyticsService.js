@@ -9,7 +9,7 @@
 //Import neccessary files into analytics
 
 const Task = require('../models/Task.js');
-const TaskActivity = require('../models/TaskActivity.js');
+const TaskActivity = require('../models/TaskActivity.js')
 
 const Habit = require('../models/Habit.js');
 const HabitHistory = require('../models/HabitHistory.js');
