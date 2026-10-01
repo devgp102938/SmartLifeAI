@@ -145,17 +145,58 @@ const getAnalytics = async ({userId, period, timezone, customStart, customEnd, n
         };
     });
 
+
+    //Medicine Logic
     const medicines = await Medicine.find({
         user: userId
     });
+
+    const medicineInput = medicines.map((medicine) => ({
+        id: medicine._id.toString(),
+        name: medicine.name,
+        startDate: medicine.startDate,
+        endDate: medicine.endDate,
+        isDeleted: medicine.isDeleted,
+        deletedAt: medicine.deletedAt
+    }));
 
     const schedules = await MedicineSchedule.find({
         user: userId
     });
 
+    const scheduleInput = schedules.map((schedule) => ({
+        id: schedule._id.toString(),
+        medicineId: schedule.medicine.toString(),
+        times: schedule.times,
+        scheduleType: schedule.scheduleType,
+        daysOfWeek: schedule.daysOfWeek,
+        effectiveFrom: schedule.effectiveFrom,
+        effectiveUntil: schedule.effectiveUntil,
+        version: schedule.version
+    }));
+
     const logs = await MedicineLog.find({
         user : userId
     })
+
+    const logInput = logs.map((log) => ({
+        medicineId: log.medicine.toString(),
+        scheduleId: log.schedule.toString(),
+        scheduledDate: log.scheduledDate,
+        scheduledTime: log.scheduledTime,
+        status: log.status
+    }));
+
+    const medicineAnalytics = calculateMedicineCompliance({
+        medicines : medicineInput,
+        schedules : scheduleInput,
+        logs : logInput,
+        periodStart : context.startDate,
+        periodEnd : context.endDate,
+        timezone : context.timezone,
+        now : context.now
+    })
+
     const checkIns = await DailyCheckIn.find({
         user: userId
     });
@@ -166,7 +207,8 @@ const getAnalytics = async ({userId, period, timezone, customStart, customEnd, n
             end : context.endDate
         },
 
-        habit : habitAnalytics
+        habit : habitAnalytics,
+        medicine : medicineAnalytics
     };
 };
 

@@ -10,7 +10,7 @@ const runTest = async () => {
 
         const result = await testing.getAnalytics({
             userId,
-            period: 'last7days',
+            period: 'last90days',
             timezone: 'Asia/Kolkata'
         });
 
