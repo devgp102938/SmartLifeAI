@@ -183,7 +183,7 @@ const getAnalytics = async ({userId, period, timezone, customStart, customEnd, n
         medicineId: log.medicine.toString(),
         scheduleId: log.schedule.toString(),
         scheduledDate: log.scheduledDate
-        scheduledTime: log.scheduledTime,
+        scheduledTime: log.scheduledTime
         status: log.status
     }));
 
