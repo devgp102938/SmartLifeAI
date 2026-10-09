@@ -257,7 +257,7 @@ function addDoseToCount(counts, classification){
 }
 
 function adherenceRate(counts){
-    return counts.expected === 0 ? null : (counts.taken / counts.expected) * 100;
+    return counts.expected === 0 ? null : parseFloat(((counts.taken / counts.expected)) * 100).toFixed(2);
 }
 
 function aggregateSummary(classifiedDoses, normalizedMedicines, todayStr){

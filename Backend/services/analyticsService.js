@@ -85,6 +85,18 @@ const getAnalytics = async ({userId, period, timezone, customStart, customEnd, n
     const taskActivity = await TaskActivity.find({
         user : userId
     });
+    
+
+    const taskAnalytics = calculateTaskAnalytics({
+        tasks,
+        taskActivity,
+        period : {
+            start : context.startDate,
+            end : context.endDate
+        },
+        timezone : context.timezone,
+        today : context.now
+    })
 
 
     //Habit logic
@@ -201,14 +213,26 @@ const getAnalytics = async ({userId, period, timezone, customStart, customEnd, n
         user: userId
     });
 
+    const dailyCheckInAnalytics  = calculateDailyCheckInAnalytics({
+        checkIns,
+        period : {
+            start : context.startDate,
+            end : context.endDate
+        },
+        timezone : context.timezone,
+        today : context.now
+    })
+
     return {
         period : {
             start : context.startDate,
             end : context.endDate
         },
 
+        task : taskAnalytics,
         habit : habitAnalytics,
-        medicine : medicineAnalytics
+        medicine : medicineAnalytics,
+        dailyCheckIn : dailyCheckInAnalytics
     };
 };
 

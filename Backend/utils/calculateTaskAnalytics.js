@@ -155,29 +155,30 @@ function getApplicableTasks(tasks, period, timezone){
  * completed state with the *last* completion's timestamp.
  */
 
-function reconstructTaskState(tasks, activitiesForTask){
+function reconstructTaskState(task, activitiesForTask) {
     const sorted = [...activitiesForTask].sort(
-        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        (a, b) =>
+            new Date(a.actionAt).getTime() -
+            new Date(b.actionAt).getTime()
     );
 
     let isCompleted = false;
     let lastCompletionTimestamp = null;
 
-    for(const activity of sorted){
-        if(activity.action === "completed"){
+    for (const activity of sorted) {
+        if (activity.action === 'completed') {
             isCompleted = true;
-            lastCompletionTimestamp = activity.timestamp;
-        }
-        else if(activity.action === "uncompleted"){
+            lastCompletionTimestamp = activity.actionAt;
+        } else if (activity.action === 'uncompleted') {
             isCompleted = false;
             lastCompletionTimestamp = null;
         }
     }
 
     return {
-        state : isCompleted ? "completed" : "pending",
-        finalCompletionTimestamp : lastCompletionTimestamp
-    }
+        state: isCompleted ? 'completed' : 'pending',
+        finalCompletionTimestamp: lastCompletionTimestamp
+    };
 }
 
 /**
@@ -225,8 +226,10 @@ function buildNormalizedTasks(applicableTask, taskActivity, timezone){
     const activitiesByTaskId = new Map();
 
     for(const activity of taskActivity){
-        const key = String(activity.taskId);
-        if (!activitiesByTaskId.has(key)) activitiesByTaskId.set(key, []);
+        const key = String(activity.task);
+        if (!activitiesByTaskId.has(key)) {
+            activitiesByTaskId.set(key, []);
+        }
         activitiesByTaskId.get(key).push(activity);
     }
 

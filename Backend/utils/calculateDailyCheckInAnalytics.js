@@ -174,7 +174,7 @@ function averages(values){
     }
     
     const sum = values.reduce((acc, v) => acc + v, 0);
-    return sum / values.length
+    return parseFloat((sum / values.length).toFixed(2));
 }
 
 function calculateAverages(normalizedCheckIns){
@@ -255,7 +255,7 @@ function calculateMissingDaysCount(normalizedCheckIns, countableDays){
  */
 
 function calculateConsistencyRate(totalCheckIns, expectedDays){
-    return expectedDays === 0 ? null : (totalCheckIns / expectedDays ) * 100;
+    return expectedDays === 0 ? null : parseFloat(((totalCheckIns / expectedDays ) * 100).toFixed(2));
 }
 
 // Trend
@@ -276,7 +276,7 @@ function calculateTrend(normalizedCheckIns){
 function calculateReflectionMetrics(normalizedCheckIns, totalCheckIns){
     const totalReflections  = normalizedCheckIns.filter((c) => c.hasReflection).length;
 
-    const reflectionRate = totalCheckIns === 0 ? null : (totalReflections / totalCheckIns) * 100;
+    const reflectionRate = totalCheckIns === 0 ? null : parseFloat(((totalReflections / totalCheckIns) * 100).toFixed(2));
 
     return {totalReflections, reflectionRate};
 }
@@ -345,7 +345,7 @@ function calculateDailyCheckInAnalytics({ checkIns, period, timezone, today}){
             averageMood,
             averageEnergy,
             averageProductivity,
-            consistencyRate,
+            consistencyRate, 
             missingDays
         },
         moodDistribution,
