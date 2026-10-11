@@ -1,34 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   CalendarCheck,
   Smile,
   Zap,
   TrendingUp,
-  FileText,
+  Trash2,
   AlertCircle,
   Calendar,
-  Check,
-  Trash2,
 } from 'lucide-react';
 import checkInService from '../services/checkInService.js';
+import { useToast } from '../context/ToastContext.jsx';
+import ConfirmModal from '../components/ConfirmModal.jsx';
+import './DailyCheckIn.css';
 
-const MOODS = [
-  { label: 'Happy', value: 'happy', emoji: '😄' },
-  { label: 'Calm', value: 'calm', emoji: '😌' },
-  { label: 'Excited', value: 'excited', emoji: '🤩' },
-  { label: 'Neutral', value: 'neutral', emoji: '😐' },
-  { label: 'Tired', value: 'tired', emoji: '🥱' },
-  { label: 'Stressed', value: 'stressed', emoji: '😫' },
-  { label: 'Anxious', value: 'anxious', emoji: '😰' },
-  { label: 'Sad', value: 'sad', emoji: '😢' },
-  { label: 'Frustrated', value: 'frustrated', emoji: '😤' },
+const MOOD_OPTIONS = [
+  { value: 'happy', label: 'Happy' },
+  { value: 'calm', label: 'Calm' },
+  { value: 'excited', label: 'Excited' },
+  { value: 'neutral', label: 'Neutral' },
+  { value: 'tired', label: 'Tired' },
+  { value: 'stressed', label: 'Stressed' },
+  { value: 'anxious', label: 'Anxious' },
+  { value: 'sad', label: 'Sad' },
+  { value: 'frustrated', label: 'Frustrated' },
 ];
 
 export const DailyCheckIn = () => {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const { showSuccess, showError } = useToast();
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Form State
-  const [date, setDate] = useState(todayStr);
+  // Form state
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [moodScore, setMoodScore] = useState(4);
   const [mood, setMood] = useState('happy');
   const [energy, setEnergy] = useState(4);
@@ -36,21 +40,26 @@ export const DailyCheckIn = () => {
   const [reflection, setReflection] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
-  const [formSuccess, setFormSuccess] = useState('');
 
-  // History State
-  const [history, setHistory] = useState([]);
-  const [loadingHistory, setLoadingHistory] = useState(true);
+  // Confirmation modal state
+  const [confirmConfig, setConfirmConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'danger',
+    confirmText: 'Confirm',
+    onConfirm: () => {},
+  });
 
   const fetchHistory = async () => {
-    setLoadingHistory(true);
+    setError(null);
     try {
-      const data = await checkInService.getCheckIns({ page: 1, limit: 10 });
-      setHistory(data.checkIns || []);
+      const data = await checkInService.getHistory();
+      setHistory(data || []);
     } catch (err) {
-      console.error('History load error:', err);
+      setError(err.friendlyMessage || 'Failed to fetch check-in history.');
     } finally {
-      setLoadingHistory(false);
+      setLoading(false);
     }
   };
 
@@ -61,7 +70,11 @@ export const DailyCheckIn = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
-    setFormSuccess('');
+
+    if (!date) {
+      setFormError('Date is required.');
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -73,27 +86,35 @@ export const DailyCheckIn = () => {
         productivity: Number(productivity),
         reflection: reflection.trim(),
       });
-      setFormSuccess(`Daily check-in for ${date} recorded successfully!`);
+      showSuccess(`Daily check-in for ${date} recorded successfully!`);
       setReflection('');
       fetchHistory();
     } catch (err) {
       if (err.response?.status === 409) {
-        // Already exists -> offer update
-        if (window.confirm('A check-in already exists for this date. Would you like to update it?')) {
-          try {
-            await checkInService.updateCheckIn(date, {
-              moodScore: Number(moodScore),
-              mood,
-              energy: Number(energy),
-              productivity: Number(productivity),
-              reflection: reflection.trim(),
-            });
-            setFormSuccess(`Check-in for ${date} updated successfully!`);
-            fetchHistory();
-          } catch (updateErr) {
-            setFormError(updateErr.friendlyMessage || 'Failed to update check-in.');
-          }
-        }
+        // Check-in already exists -> ask via ConfirmModal if user wants to update it
+        setConfirmConfig({
+          isOpen: true,
+          title: 'Update Existing Check-In?',
+          message: `A check-in already exists for ${date}. Would you like to overwrite it with these new ratings?`,
+          type: 'warning',
+          confirmText: 'Update Check-In',
+          onConfirm: async () => {
+            setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+            try {
+              await checkInService.updateCheckIn(date, {
+                moodScore: Number(moodScore),
+                mood,
+                energy: Number(energy),
+                productivity: Number(productivity),
+                reflection: reflection.trim(),
+              });
+              showSuccess(`Check-in for ${date} updated successfully!`);
+              fetchHistory();
+            } catch (updateErr) {
+              showError(updateErr.friendlyMessage || 'Failed to update check-in.');
+            }
+          },
+        });
       } else {
         setFormError(err.friendlyMessage || 'Failed to record check-in.');
       }
@@ -102,103 +123,77 @@ export const DailyCheckIn = () => {
     }
   };
 
-  const handleDelete = async (targetDate) => {
-    if (!window.confirm(`Delete check-in for ${targetDate}?`)) return;
-    try {
-      await checkInService.deleteCheckIn(targetDate);
-      fetchHistory();
-    } catch (err) {
-      alert(err.friendlyMessage || 'Failed to delete check-in.');
-    }
+  const handleDeletePrompt = (targetDate) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete Daily Check-In',
+      message: `Are you sure you want to delete the check-in record for ${targetDate}?`,
+      type: 'danger',
+      confirmText: 'Delete Record',
+      onConfirm: async () => {
+        setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await checkInService.deleteCheckIn(targetDate);
+          showSuccess('Daily check-in record deleted.');
+          fetchHistory();
+        } catch (err) {
+          showError(err.friendlyMessage || 'Failed to delete check-in.');
+        }
+      },
+    });
   };
 
+  const todayStr = new Date().toISOString().split('T')[0];
+
   return (
-    <div className="space-y-8">
+    <div className="checkin-container">
       {/* Header */}
-      <div className="pb-2 border-b border-slate-200">
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-          <CalendarCheck className="w-6 h-6 text-indigo-600" />
-          Daily Well-Being Check-In
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Reflect on your mood, mental energy, and daily output to power long-term pattern analytics.
-        </p>
+      <div className="checkin-header">
+        <div className="checkin-title-group">
+          <h1>
+            <CalendarCheck size={26} color="var(--color-primary-blue)" />
+            Daily Well-Being Check-In
+          </h1>
+          <p>
+            Log daily psychological mood, energy reserve, and self-reported productivity pacing.
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* CHECK-IN FORM (Left: 7 cols) */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <span>Log Check-In</span>
-          </h2>
-
-          {formSuccess && (
-            <div className="mb-4 p-3 rounded-xl bg-emerald-50 text-emerald-800 text-xs font-semibold flex items-center gap-2">
-              <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span>{formSuccess}</span>
-            </div>
-          )}
+      {/* Main Layout */}
+      <div className="checkin-layout">
+        {/* Form Card */}
+        <div className="checkin-form-card">
+          <h2 className="card-heading">Log Today's State</h2>
 
           {formError && (
-            <div className="mb-4 p-3 rounded-xl bg-red-50 text-red-700 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+            <div className="form-error-alert">
+              <AlertCircle size={16} />
               <span>{formError}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Date Input */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                Calendar Date *
-              </label>
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label htmlFor="checkin-date">Check-In Date *</label>
               <input
+                id="checkin-date"
                 type="date"
-                required
                 max={todayStr}
+                required
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full sm:w-48 px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-              <span className="text-[11px] text-slate-400 block mt-1">
-                Can log for today or up to 5 days back.
-              </span>
             </div>
 
-            {/* Mood Category Badges */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
-                Primary Mood *
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {MOODS.map((m) => (
-                  <button
-                    type="button"
-                    key={m.value}
-                    onClick={() => setMood(m.value)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                      mood === m.value
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span>{m.emoji}</span>
-                    <span>{m.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Sliders: Mood Score, Energy, Productivity */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-              {/* Mood Score (1-5) */}
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-2">
-                  <span className="flex items-center gap-1">
-                    <Smile className="w-4 h-4 text-indigo-500" />
-                    Mood Rating
+            <div className="form-group">
+              <div className="rating-slider-group">
+                <div className="rating-slider-label">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Smile size={14} color="var(--color-primary-blue)" />
+                    Mood Rating (1-5)
                   </span>
-                  <span className="text-indigo-600 text-sm">{moodScore}/5</span>
+                  <span className="rating-slider-value">{moodScore} / 5</span>
                 </div>
                 <input
                   type="range"
@@ -207,18 +202,39 @@ export const DailyCheckIn = () => {
                   step="1"
                   value={moodScore}
                   onChange={(e) => setMoodScore(e.target.value)}
-                  className="w-full accent-indigo-600 cursor-pointer"
+                  className="rating-range-input"
                 />
+                <div className="rating-scale-ticks">
+                  <span>1 (Lowest)</span>
+                  <span>3 (Balanced)</span>
+                  <span>5 (Optimal)</span>
+                </div>
               </div>
+            </div>
 
-              {/* Energy (1-5) */}
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-2">
-                  <span className="flex items-center gap-1">
-                    <Zap className="w-4 h-4 text-amber-500" />
-                    Energy Level
+            <div className="form-group">
+              <label htmlFor="checkin-mood-tag">Primary Affect / Mood State</label>
+              <select
+                id="checkin-mood-tag"
+                value={mood}
+                onChange={(e) => setMood(e.target.value)}
+              >
+                {MOOD_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <div className="rating-slider-group">
+                <div className="rating-slider-label">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Zap size={14} color="var(--color-warning)" />
+                    Energy Level (1-5)
                   </span>
-                  <span className="text-amber-600 text-sm">{energy}/5</span>
+                  <span className="rating-slider-value">{energy} / 5</span>
                 </div>
                 <input
                   type="range"
@@ -227,18 +243,24 @@ export const DailyCheckIn = () => {
                   step="1"
                   value={energy}
                   onChange={(e) => setEnergy(e.target.value)}
-                  className="w-full accent-amber-500 cursor-pointer"
+                  className="rating-range-input"
                 />
+                <div className="rating-scale-ticks">
+                  <span>1 (Depleted)</span>
+                  <span>3 (Moderate)</span>
+                  <span>5 (Vibrant)</span>
+                </div>
               </div>
+            </div>
 
-              {/* Productivity (1-5) */}
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-2">
-                  <span className="flex items-center gap-1">
-                    <TrendingUp className="w-4 h-4 text-cyan-500" />
-                    Productivity
+            <div className="form-group">
+              <div className="rating-slider-group">
+                <div className="rating-slider-label">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <TrendingUp size={14} color="var(--color-health-green)" />
+                    Productivity Pacing (1-5)
                   </span>
-                  <span className="text-cyan-600 text-sm">{productivity}/5</span>
+                  <span className="rating-slider-value">{productivity} / 5</span>
                 </div>
                 <input
                   type="range"
@@ -247,100 +269,125 @@ export const DailyCheckIn = () => {
                   step="1"
                   value={productivity}
                   onChange={(e) => setProductivity(e.target.value)}
-                  className="w-full accent-cyan-500 cursor-pointer"
+                  className="rating-range-input"
                 />
+                <div className="rating-scale-ticks">
+                  <span>1 (Stalled)</span>
+                  <span>3 (Steady)</span>
+                  <span>5 (Peak)</span>
+                </div>
               </div>
             </div>
 
-            {/* Reflection Textarea */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                Personal Reflection & Notes
-              </label>
+            <div className="form-group">
+              <label htmlFor="checkin-reflection">Mindset & Journal Reflection</label>
               <textarea
+                id="checkin-reflection"
                 rows="3"
-                maxLength={1000}
-                placeholder="What went well today? What challenges or triggers arose?"
+                placeholder="What went well? Any obstacles, fatigue cues, or wins?"
                 value={reflection}
                 onChange={(e) => setReflection(e.target.value)}
-                className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-              <span className="text-[11px] text-slate-400 block text-right mt-0.5">
-                {reflection.length}/1000
-              </span>
             </div>
 
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm rounded-xl shadow-md transition-all cursor-pointer"
+              className="btn-primary"
+              style={{ width: '100%', marginTop: '8px' }}
             >
-              {submitting ? 'Saving...' : 'Submit Daily Check-In'}
+              {submitting ? 'Submitting...' : 'Save Check-In'}
             </button>
           </form>
         </div>
 
-        {/* RECENT CHECK-INS (Right: 5 cols) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-indigo-600" />
-              <span>Recent Check-Ins</span>
-            </h2>
+        {/* History List Card */}
+        <div className="checkin-history-card">
+          <h2 className="card-heading">Check-In History</h2>
 
-            {loadingHistory ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-16 bg-slate-50 rounded-xl animate-pulse" />
-                ))}
-              </div>
-            ) : history.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-sm">
-                <Smile className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                <span>No check-in history logged yet.</span>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
-                {history.map((item) => (
-                  <div
-                    key={item._id}
-                    className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-slate-50 transition-colors flex items-start justify-between gap-3"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-800">{item.date}</span>
-                        <span className="text-[11px] px-2 py-0.5 rounded-md font-semibold bg-indigo-50 text-indigo-700 capitalize">
-                          {item.mood}
+          {loading ? (
+            <div className="history-list">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="skeleton-card" style={{ height: '90px' }} />
+              ))}
+            </div>
+          ) : history.length === 0 ? (
+            <div className="habits-empty-state" style={{ marginTop: '16px' }}>
+              <CalendarCheck size={40} className="habits-empty-icon" />
+              <h3 className="habits-empty-title">No check-ins logged yet</h3>
+              <p className="habits-empty-desc">
+                Submit your first daily check-in using the form on the left to track trends.
+              </p>
+            </div>
+          ) : (
+            <div className="history-list">
+              {history.map((item) => {
+                const formattedDate = new Date(item.date).toLocaleDateString('en-US', {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                });
+
+                return (
+                  <div key={item._id} className="history-item">
+                    <div className="history-item-top">
+                      <div className="history-date">
+                        <Calendar size={14} color="var(--color-primary-blue)" />
+                        <span>{formattedDate}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="history-mood-badge">
+                          {item.mood || 'Balanced'}
                         </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePrompt(item.date)}
+                          className="history-delete-btn"
+                          title="Delete check-in"
+                          aria-label="Delete check-in"
+                        >
+                          <Trash2 size={15} />
+                        </button>
                       </div>
-
-                      <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
-                        <span>Mood: <strong>{item.moodScore}/5</strong></span>
-                        <span>Energy: <strong>{item.energy}/5</strong></span>
-                        <span>Output: <strong>{item.productivity}/5</strong></span>
-                      </div>
-
-                      {item.reflection && (
-                        <p className="text-xs text-slate-600 italic mt-1.5 line-clamp-2">
-                          "{item.reflection}"
-                        </p>
-                      )}
                     </div>
 
-                    <button
-                      onClick={() => handleDelete(item.date)}
-                      className="text-slate-400 hover:text-red-600 p-1 rounded-lg transition-colors cursor-pointer"
-                      title="Delete check-in"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="history-scores-row">
+                      <div className="score-cell">
+                        <span className="score-cell-label">Mood</span>
+                        <span className="score-cell-num">{item.moodScore}/5</span>
+                      </div>
+                      <div className="score-cell">
+                        <span className="score-cell-label">Energy</span>
+                        <span className="score-cell-num">{item.energy}/5</span>
+                      </div>
+                      <div className="score-cell">
+                        <span className="score-cell-label">Productivity</span>
+                        <span className="score-cell-num">{item.productivity}/5</span>
+                      </div>
+                    </div>
+
+                    {item.reflection && (
+                      <p className="history-reflection-text">"{item.reflection}"</p>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* REUSABLE CONFIRMATION MODAL */}
+      <ConfirmModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+        confirmText={confirmConfig.confirmText}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

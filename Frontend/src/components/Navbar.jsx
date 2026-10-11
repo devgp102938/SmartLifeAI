@@ -1,10 +1,12 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { LogOut, User as UserIcon, Calendar, Clock } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { LogOut, Calendar, Clock, Menu, Sun, Moon } from 'lucide-react';
 import useAuth from '../hooks/useAuth.js';
+import { useTheme } from '../context/ThemeContext.jsx';
+import './Navbar.css';
 
-export const Navbar = () => {
+export const Navbar = ({ onToggleSidebar }) => {
   const { user, logout } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -19,42 +21,64 @@ export const Navbar = () => {
   }).format(new Date());
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-20">
-      {/* Left: Date & Time Info */}
-      <div className="flex items-center gap-3 text-sm text-slate-500 font-medium">
-        <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 text-slate-700">
-          <Calendar className="w-4 h-4 text-slate-500" />
-          <span>{todayStr}</span>
-        </div>
-        <div className="hidden sm:flex items-center gap-1 text-xs text-slate-400">
-          <Clock className="w-3.5 h-3.5" />
-          <span>{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
+    <header className="app-navbar">
+      {/* Left: Mobile toggle & Date */}
+      <div className="navbar-left">
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          className="navbar-menu-toggle"
+          aria-label="Toggle navigation menu"
+        >
+          <Menu size={18} />
+        </button>
+
+        <div className="navbar-datetime">
+          <div className="navbar-date-badge">
+            <Calendar size={15} color="var(--color-text-secondary)" />
+            <span>{todayStr}</span>
+          </div>
+          <div className="navbar-timezone">
+            <Clock size={13} />
+            <span>{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
+          </div>
         </div>
       </div>
 
-      {/* Right: User info & Logout */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold flex items-center justify-center text-sm shadow-sm">
-            {user?.name ? user.name.charAt(0).toUpperCase() : <UserIcon className="w-4 h-4" />}
+      {/* Right: Theme Toggle, User profile & Logout */}
+      <div className="navbar-right">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="navbar-theme-toggle"
+          aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+          title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+        >
+          {isDark ? <Sun size={17} /> : <Moon size={17} />}
+        </button>
+
+        <div className="navbar-user-profile">
+          <div className="navbar-user-avatar">
+            <Link to="/profile">D</Link>
           </div>
-          <div className="hidden md:block text-left">
-            <div className="text-sm font-semibold text-slate-800 leading-tight">
+          <div className="navbar-user-details">
+            <div className="navbar-user-name">
               {user?.name || 'User'}
             </div>
-            <div className="text-xs text-slate-400 capitalize">
+            <div className="navbar-user-role">
               {user?.role || 'Personal Account'}
             </div>
           </div>
         </div>
 
         <button
+          type="button"
           onClick={handleLogout}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 border border-slate-200 hover:border-red-200 transition-all cursor-pointer"
+          className="navbar-logout-btn"
           title="Sign out of SmartLife AI"
         >
-          <LogOut className="w-4 h-4" />
-          <span className="hidden sm:inline">Logout</span>
+          <LogOut size={15} />
+          <span className="navbar-logout-label">Logout</span>
         </button>
       </div>
     </header>

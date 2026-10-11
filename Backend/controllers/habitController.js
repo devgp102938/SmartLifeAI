@@ -89,6 +89,12 @@ const getHabits = async (req, res) => {
         const now = new Date();
         now.setHours(0,0,0,0);
 
+        const todayHistories = await HabitHistory.find({
+            user: req.user._id,
+            date: now
+        });
+        const completedHabitIds = new Set(todayHistories.map(h => h.habit.toString()));
+
         const habitsWithStatus = habits.map(habit => {
         const habitObj = habit.toObject();
 
@@ -96,6 +102,8 @@ const getHabits = async (req, res) => {
             now < habit.startDate ? 'upcoming' 
                 : now > habit.endDate ? 'finished'
                     : 'active'; 
+
+        habitObj.completedToday = completedHabitIds.has(habit._id.toString());
 
         return habitObj;
        });

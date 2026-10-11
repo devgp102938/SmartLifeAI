@@ -1,0 +1,222 @@
+.checkin-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.checkin-header {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.checkin-title-group h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  letter-spacing: -0.02em;
+}
+
+.checkin-title-group p {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+/* Two column layout: Form & History */
+.checkin-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 1024px) {
+  .checkin-layout {
+    grid-template-columns: 420px 1fr;
+  }
+}
+
+/* Check-In Form Card */
+.checkin-form-card {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.card-heading {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.rating-slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rating-slider-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.rating-slider-value {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-primary-blue);
+}
+
+.rating-range-input {
+  width: 100%;
+  accent-color: var(--color-primary-blue);
+  cursor: pointer;
+  padding: 0;
+  border: none;
+}
+
+.rating-scale-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* History Card & List */
+.checkin-history-card {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.history-item {
+  background-color: var(--color-bg-main);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all var(--transition-fast);
+}
+
+.history-item:hover {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border-hover);
+  box-shadow: var(--shadow-xs);
+}
+
+.history-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-date {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-mood-badge {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background-color: rgba(139, 92, 246, 0.12);
+  color: var(--color-ai-purple);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.history-scores-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  text-align: center;
+}
+
+.score-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.score-cell-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+.score-cell-num {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.history-reflection-text {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  font-style: italic;
+  padding-left: 8px;
+  border-left: 2px solid var(--color-primary-blue);
+}
+
+.history-delete-btn {
+  color: var(--color-text-muted);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.history-delete-btn:hover {
+  color: var(--color-error);
+  background-color: var(--color-error-bg);
+}
+
+@media (max-width: 640px) {
+  .checkin-container {
+    gap: 16px;
+  }
+  .checkin-form-card,
+  .checkin-history-card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 390px) {
+  .checkin-title-group h1 {
+    font-size: 20px;
+  }
+  .history-item {
+    padding: 14px;
+  }
+}

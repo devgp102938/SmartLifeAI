@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   CheckSquare,
   Plus,
@@ -9,11 +9,15 @@ import {
   AlertCircle,
   Search,
   Filter,
-  Clock,
+  X,
 } from 'lucide-react';
 import taskService from '../services/taskService.js';
+import { useToast } from '../context/ToastContext.jsx';
+import ConfirmModal from '../components/ConfirmModal.jsx';
+import './Tasks.css';
 
 export const Tasks = () => {
+  const { showSuccess, showError } = useToast();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -27,13 +31,20 @@ export const Tasks = () => {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Confirmation modal state
+  const [confirmConfig, setConfirmConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
   // Filter state
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all, pending, completed
   const [priorityFilter, setPriorityFilter] = useState('all');
 
   const fetchTasks = async () => {
-    setLoading(true);
     setError(null);
     try {
       const data = await taskService.getTasks();
@@ -71,6 +82,7 @@ export const Tasks = () => {
       setDueDate('');
       setDescription('');
       setPriority('medium');
+      showSuccess('Task created successfully.');
       fetchTasks();
     } catch (err) {
       setFormError(err.friendlyMessage || 'Failed to set task.');
@@ -83,23 +95,33 @@ export const Tasks = () => {
     try {
       if (task.status === 'completed') {
         await taskService.uncompleteTask(task._id);
+        showSuccess('Task marked as pending.');
       } else {
         await taskService.completeTask(task._id);
+        showSuccess('Task marked as completed!');
       }
       fetchTasks();
     } catch (err) {
-      alert(err.friendlyMessage || 'Failed to update task status.');
+      showError(err.friendlyMessage || 'Failed to update task status.');
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
-    try {
-      await taskService.deleteTask(id);
-      fetchTasks();
-    } catch (err) {
-      alert(err.friendlyMessage || 'Failed to delete task.');
-    }
+  const handleDeletePrompt = (task) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Delete Task',
+      message: `Are you sure you want to delete "${task.title}"? This cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await taskService.deleteTask(task._id);
+          showSuccess('Task deleted successfully.');
+          fetchTasks();
+        } catch (err) {
+          showError(err.friendlyMessage || 'Failed to delete task.');
+        }
+      },
+    });
   };
 
   // Filter logic
@@ -116,52 +138,53 @@ export const Tasks = () => {
     return true;
   });
 
-  // Calculate default today YYYY-MM-DD for min date
   const todayStr = new Date().toISOString().split('T')[0];
 
   return (
-    <div className="space-y-6">
+    <div className="tasks-container">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <CheckSquare className="w-6 h-6 text-indigo-600" />
+      <div className="tasks-header">
+        <div className="tasks-title-group">
+          <h1>
+            <CheckSquare size={26} color="var(--color-primary-blue)" />
             Task Management
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p>
             Organize, prioritize, and track completion of your actionable commitments.
           </p>
         </div>
 
         <button
+          type="button"
           onClick={() => setShowModal(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm rounded-xl shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+          className="btn-primary"
         >
-          <Plus className="w-4 h-4" />
+          <Plus size={18} />
           <span>New Task</span>
         </button>
       </div>
 
-      {/* Filter toolbar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
-        <div className="relative w-full md:w-72">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* Filter and Search Bar */}
+      <div className="tasks-filter-bar">
+        <div className="tasks-search-wrapper">
+          <Search size={16} className="tasks-search-icon" />
           <input
             type="text"
             placeholder="Search tasks..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="tasks-search-input"
           />
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center gap-1 text-sm bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
+        <div className="tasks-filter-group">
+          <div className="filter-select-wrapper">
+            <Filter size={14} color="var(--color-text-muted)" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-transparent border-none text-slate-700 text-sm focus:outline-none cursor-pointer"
+              className="filter-select"
+              aria-label="Filter by status"
             >
               <option value="all">All Statuses</option>
               <option value="pending">Pending</option>
@@ -169,11 +192,12 @@ export const Tasks = () => {
             </select>
           </div>
 
-          <div className="flex items-center gap-1 text-sm bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+          <div className="filter-select-wrapper">
             <select
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value)}
-              className="bg-transparent border-none text-slate-700 text-sm focus:outline-none cursor-pointer"
+              className="filter-select"
+              aria-label="Filter by priority"
             >
               <option value="all">All Priorities</option>
               <option value="high">High Priority</option>
@@ -184,98 +208,98 @@ export const Tasks = () => {
         </div>
       </div>
 
+      {/* Error state */}
+      {error && (
+        <div className="form-error-alert">
+          <AlertCircle size={18} />
+          <span>{error}</span>
+        </div>
+      )}
+
       {/* Tasks List */}
       {loading ? (
-        <div className="space-y-3">
+        <div className="tasks-list">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 bg-white rounded-xl border border-slate-200 animate-pulse" />
+            <div key={i} className="skeleton-card" style={{ height: '72px' }} />
           ))}
         </div>
       ) : filteredTasks.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
-          <CheckSquare className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-700">No tasks found</h3>
-          <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
+        <div className="tasks-empty-state">
+          <CheckSquare size={44} className="tasks-empty-icon" />
+          <h3 className="tasks-empty-title">No tasks found</h3>
+          <p className="tasks-empty-desc">
             {tasks.length === 0
-              ? 'Get started by creating your first actionable task above.'
-              : 'No tasks matched your search or filter criteria.'}
+              ? 'Get started by creating your first task above.'
+              : 'Try clearing your filters or search query.'}
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="tasks-list">
           {filteredTasks.map((task) => {
             const isCompleted = task.status === 'completed';
-            const formattedDate = new Date(task.dueDate).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            });
+            const isOverdue =
+              !isCompleted && task.dueDate && new Date(task.dueDate) < new Date(todayStr);
 
-            const priorityBadge = {
-              high: 'bg-rose-50 text-rose-700 border-rose-200',
-              medium: 'bg-amber-50 text-amber-700 border-amber-200',
-              low: 'bg-slate-100 text-slate-600 border-slate-200',
+            const priorityClass = {
+              high: 'priority-high',
+              medium: 'priority-medium',
+              low: 'priority-low',
             }[task.priority || 'medium'];
+
+            const formattedDueDate = task.dueDate
+              ? new Date(task.dueDate).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })
+              : null;
 
             return (
               <div
                 key={task._id}
-                className={`bg-white rounded-xl border p-4 shadow-sm hover:shadow-md transition-all flex items-start justify-between gap-4 ${
-                  isCompleted ? 'border-slate-200/60 bg-slate-50/50 opacity-80' : 'border-slate-200'
-                }`}
+                className={`task-item-card ${isCompleted ? 'is-completed' : ''}`}
               >
-                <div className="flex items-start gap-3.5">
-                  <button
-                    onClick={() => handleToggleComplete(task)}
-                    className="mt-0.5 text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
-                    title={isCompleted ? 'Mark as pending' : 'Mark as completed'}
-                  >
-                    {isCompleted ? (
-                      <CheckCircle className="w-5 h-5 text-emerald-600 fill-emerald-50" />
-                    ) : (
-                      <Circle className="w-5 h-5" />
-                    )}
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleComplete(task)}
+                  className={`task-checkbox-btn ${isCompleted ? 'checked' : ''}`}
+                  aria-label={isCompleted ? 'Mark incomplete' : 'Mark completed'}
+                >
+                  {isCompleted ? <CheckCircle size={22} /> : <Circle size={22} />}
+                </button>
 
-                  <div>
-                    <h4
-                      className={`text-base font-semibold leading-snug ${
-                        isCompleted ? 'line-through text-slate-400' : 'text-slate-800'
-                      }`}
-                    >
-                      {task.title}
-                    </h4>
+                <div className="task-content">
+                  <div className="task-title-row">
+                    <span className="task-title">{task.title}</span>
+                    <span className={`priority-badge ${priorityClass}`}>
+                      {task.priority || 'Medium'}
+                    </span>
+                  </div>
 
-                    {task.description && (
-                      <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                        {task.description}
-                      </p>
-                    )}
+                  {task.description && (
+                    <p className="task-description">{task.description}</p>
+                  )}
 
-                    <div className="flex flex-wrap items-center gap-3 mt-2.5">
-                      <span className="flex items-center gap-1 text-xs text-slate-500">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        Due {formattedDate}
+                  <div className="task-meta-row">
+                    {formattedDueDate && (
+                      <span className={`task-due-info ${isOverdue ? 'is-overdue' : ''}`}>
+                        <Calendar size={13} />
+                        <span>Due {formattedDueDate}</span>
+                        {isOverdue && <span> (Overdue)</span>}
                       </span>
-
-                      <span
-                        className={`text-[11px] px-2 py-0.5 rounded-md font-semibold border uppercase tracking-wider ${priorityBadge}`}
-                      >
-                        {task.priority || 'medium'}
-                      </span>
-                    </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleDelete(task._id)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                    title="Delete task"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDeletePrompt(task)}
+                  className="task-delete-btn"
+                  title="Delete task"
+                  aria-label="Delete task"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             );
           })}
@@ -284,94 +308,110 @@ export const Tasks = () => {
 
       {/* CREATE MODAL */}
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Create New Task</h3>
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Create New Task</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowModal(false)}
+                aria-label="Close dialog"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-            {formError && (
-              <div className="mb-4 p-3 rounded-xl bg-red-50 text-red-700 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{formError}</span>
+            <form onSubmit={handleCreate}>
+              <div className="modal-body">
+                {formError && (
+                  <div className="form-error-alert">
+                    <AlertCircle size={16} />
+                    <span>{formError}</span>
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label htmlFor="task-title">Task Title *</label>
+                  <input
+                    id="task-title"
+                    type="text"
+                    required
+                    placeholder="e.g., Review laboratory bloodwork results"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="task-due-date">Due Date *</label>
+                    <input
+                      id="task-due-date"
+                      type="date"
+                      required
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="task-priority">Priority</label>
+                    <select
+                      id="task-priority"
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value)}
+                    >
+                      <option value="low">Low Priority</option>
+                      <option value="medium">Medium Priority</option>
+                      <option value="high">High Priority</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="task-description">Description</label>
+                  <textarea
+                    id="task-description"
+                    rows="3"
+                    placeholder="Additional context, action steps or notes"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
+                </div>
               </div>
-            )}
 
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">
-                  Task Title *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g., Complete Quarterly Research Report"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">
-                  Due Date *
-                </label>
-                <input
-                  type="date"
-                  required
-                  min={todayStr}
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">
-                  Priority
-                </label>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">
-                  Description
-                </label>
-                <textarea
-                  rows="3"
-                  placeholder="Add notes or task details..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="modal-footer">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                  className="btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm rounded-xl shadow-md transition-all cursor-pointer"
+                  className="btn-primary"
                 >
-                  {submitting ? 'Creating...' : 'Save Task'}
+                  {submitting ? 'Creating...' : 'Create Task'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* REUSABLE CONFIRMATION MODAL */}
+      <ConfirmModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type="danger"
+        confirmText="Delete Task"
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

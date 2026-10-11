@@ -171,14 +171,68 @@ const createMedicine = async (req, res) => {
 const getMedicine = async (req, res) => {
     try
     {
-        const medicine = await Medicine.find({
+        const medicines = await Medicine.find({
             user : req.user._id,
             isDeleted : false
         }).sort({createdAt : -1});
 
+        if (!medicines.length) {
+            return res.status(200).json({
+                success : true,
+                medicine: [],
+            });
+        }
+
+        const medIds = medicines.map(m => m._id);
+
+        // Fetch active schedules for these medicines
+        const schedules = await MedicineSchedule.find({
+            user : req.user._id,
+            medicine : { $in : medIds },
+            isActive : true
+        }).sort({ effectiveFrom : -1 });
+
+        const scheduleByMed = {};
+        for (const s of schedules) {
+            const medIdStr = s.medicine.toString();
+            if (!scheduleByMed[medIdStr]) {
+                scheduleByMed[medIdStr] = s;
+            }
+        }
+
+        // Fetch today's dose logs
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const logs = await MedicineLog.find({
+            user : req.user._id,
+            medicine : { $in : medIds },
+            scheduledDate : today
+        });
+
+        const logsByMed = {};
+        for (const log of logs) {
+            const medIdStr = log.medicine.toString();
+            if (!logsByMed[medIdStr]) {
+                logsByMed[medIdStr] = {};
+            }
+            logsByMed[medIdStr][log.scheduledTime] = log.status;
+        }
+
+        const medicinesWithSchedule = medicines.map(med => {
+            const medObj = med.toObject();
+            const sched = scheduleByMed[med._id.toString()];
+            medObj.schedule = sched || null;
+            medObj.times = sched ? sched.times : [];
+            medObj.scheduleType = sched ? sched.scheduleType : 'daily';
+            medObj.daysOfWeek = sched ? sched.daysOfWeek : [];
+            medObj.todayLogs = logsByMed[med._id.toString()] || {};
+            return medObj;
+        });
+
         res.status(200).json({
             success : true,
-            medicine,
+            medicine: medicinesWithSchedule,
         });
 
     }
@@ -214,9 +268,36 @@ const getMedicineById = async (req, res) => {
             });
         }
 
+        const activeSchedule = await MedicineSchedule.findOne({
+            user : req.user._id,
+            medicine : medicine._id,
+            isActive : true
+        }).sort({ effectiveFrom : -1 });
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const logs = await MedicineLog.find({
+            user : req.user._id,
+            medicine : medicine._id,
+            scheduledDate : today
+        });
+
+        const todayLogs = {};
+        for (const log of logs) {
+            todayLogs[log.scheduledTime] = log.status;
+        }
+
+        const medObj = medicine.toObject();
+        medObj.schedule = activeSchedule || null;
+        medObj.times = activeSchedule ? activeSchedule.times : [];
+        medObj.scheduleType = activeSchedule ? activeSchedule.scheduleType : 'daily';
+        medObj.daysOfWeek = activeSchedule ? activeSchedule.daysOfWeek : [];
+        medObj.todayLogs = todayLogs;
+
         res.status(200).json({
             success : true,
-            medicine
+            medicine: medObj
         })
     }
     catch(err)

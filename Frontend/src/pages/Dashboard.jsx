@@ -1,13 +1,8 @@
-import React from 'react';
 import {
   CheckCircle2,
-  Clock,
-  AlertTriangle,
   Flame,
   Pill,
   Heart,
-  Zap,
-  TrendingUp,
   RefreshCw,
   Calendar,
   Smile,
@@ -24,7 +19,9 @@ import {
   Legend,
   CartesianGrid,
 } from 'recharts';
+import { Link } from 'react-router-dom';
 import useDashboard from '../hooks/useDashboard.js';
+import './Dashboard.css';
 
 const PERIOD_OPTIONS = [
   { label: 'Last 7 Days', value: 'last7days' },
@@ -50,26 +47,38 @@ export const Dashboard = () => {
       }))
     : [];
 
+  const chartGridStroke = 'var(--color-border-light)';
+  const chartAxisTick = { fontSize: 11, fill: 'var(--color-text-muted)' };
+  const chartTooltipStyle = {
+    backgroundColor: 'var(--color-bg-card)',
+    borderColor: 'var(--color-border)',
+    color: 'var(--color-text-primary)',
+    borderRadius: 10,
+    boxShadow: 'var(--shadow-md)',
+  };
+  const chartTooltipLabelStyle = { color: 'var(--color-text-secondary)', fontWeight: 600 };
+  const chartTooltipItemStyle = { color: 'var(--color-text-primary)' };
+  const chartLegendStyle = { fontSize: 12, color: 'var(--color-text-secondary)' };
+
   return (
-    <div className="space-y-8">
+    <div className="dashboard-container">
       {/* Header & Period Selector */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            System Performance Dashboard
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
+      <div className="dashboard-header">
+        <div className="dashboard-title-group">
+          <h1>System Performance Dashboard</h1>
+          <p>
             Aggregated intelligence across tasks, habit streaks, medical compliance, and well-being.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-sm text-sm">
-            <Calendar className="w-4 h-4 text-slate-400" />
+        <div className="dashboard-actions">
+          <div className="period-select-wrapper">
+            <Calendar size={16} color="var(--color-text-muted)" />
             <select
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
-              className="bg-transparent border-none text-slate-700 font-medium text-sm focus:outline-none cursor-pointer"
+              className="period-select"
+              aria-label="Select analytics period"
             >
               {PERIOD_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -82,22 +91,24 @@ export const Dashboard = () => {
           <button
             onClick={refetch}
             disabled={loading}
-            className="p-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-slate-600 hover:text-indigo-600 shadow-sm transition-colors cursor-pointer"
+            className="refresh-btn"
             title="Refresh analytics"
+            aria-label="Refresh analytics"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
+            <RefreshCw
+              size={16}
+              className={loading ? 'spinning' : ''}
+              color={loading ? 'var(--color-primary-blue)' : 'currentColor'}
+            />
           </button>
         </div>
       </div>
 
       {/* Error state */}
       {error && (
-        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm flex items-center justify-between">
+        <div className="dashboard-error-banner">
           <span>{error}</span>
-          <button
-            onClick={refetch}
-            className="text-xs font-semibold underline hover:no-underline ml-4"
-          >
+          <button onClick={refetch} className="retry-link">
             Try Again
           </button>
         </div>
@@ -105,108 +116,114 @@ export const Dashboard = () => {
 
       {/* Loading Skeleton or Content */}
       {loading && !data ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="stats-grid">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-32 bg-white rounded-2xl border border-slate-200 p-5 animate-pulse" />
+            <div key={i} className="skeleton-card" />
           ))}
         </div>
       ) : (
         <>
           {/* SECTION 1: OVERVIEW METRIC CARDS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="stats-grid">
             {/* 1. Tasks Card */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Tasks Overview
-                </span>
-                <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
-                  <CheckCircle2 className="w-5 h-5" />
+            <div className="dashboard-stat-card">
+              <div>
+                <div className="stat-card-header">
+                  <span className="stat-card-title">Tasks Overview</span>
+                  <div className="stat-icon-wrapper icon-tasks">
+                    <Link to={'/Tasks'}  style={{'text-decoration': 'none', 'color' : 'inherit'}}>
+                    <CheckCircle2 size={18} style={{'margin-top': '5px'}}/>
+                    </Link>
+                  </div>
+                </div>
+                <div className="stat-card-value-group">
+                  <span className="stat-card-value">
+                    {overview?.tasks?.completionRate !== null && overview?.tasks?.completionRate !== undefined
+                      ? `${Number(overview.tasks.completionRate).toFixed(0)}%`
+                      : 'N/A'}
+                  </span>
+                  <span className="stat-card-label">Completion Rate</span>
                 </div>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-slate-900">
-                  {overview?.tasks?.completionRate !== null && overview?.tasks?.completionRate !== undefined
-                    ? `${Number(overview.tasks.completionRate).toFixed(0)}%`
-                    : 'N/A'}
-                </span>
-                <span className="text-xs text-slate-500 font-medium">Completion Rate</span>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-                <span>Completed: <strong className="text-emerald-600">{overview?.tasks?.completed ?? 0}</strong></span>
-                <span>Pending: <strong className="text-slate-800">{overview?.tasks?.pending ?? 0}</strong></span>
-                <span>Overdue: <strong className="text-rose-600">{overview?.tasks?.overdue ?? 0}</strong></span>
+              <div className="stat-card-footer">
+                <span>Completed: <strong className="stat-highlight-green">{overview?.tasks?.completed ?? 0}</strong></span>
+                <span>Pending: <strong>{overview?.tasks?.pending ?? 0}</strong></span>
+                <span>Overdue: <strong className="stat-highlight-red">{overview?.tasks?.overdue ?? 0}</strong></span>
               </div>
             </div>
 
             {/* 2. Habits Card */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Habit Streaks
-                </span>
-                <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
-                  <Flame className="w-5 h-5" />
+            <div className="dashboard-stat-card">
+              <div>
+                <div className="stat-card-header">
+                  <span className="stat-card-title">Habit Streaks</span>
+                  <div className="stat-icon-wrapper icon-habits">
+                    <Link to={'/Habits'} style={{'text-decoration': 'none', 'color' : 'inherit'}}>
+                    <Flame size={18} style={{'margin-top': '5px'}}/>
+                    </Link>
+                  </div>
+                </div>
+                <div className="stat-card-value-group">
+                  <span className="stat-card-value">
+                    {overview?.habits?.averageCurrentStreak !== null && overview?.habits?.averageCurrentStreak !== undefined
+                      ? `${Number(overview.habits.averageCurrentStreak).toFixed(1)}d`
+                      : '0d'}
+                  </span>
+                  <span className="stat-card-label">Avg Current Streak</span>
                 </div>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-slate-900">
-                  {overview?.habits?.averageCurrentStreak !== null && overview?.habits?.averageCurrentStreak !== undefined
-                    ? `${Number(overview.habits.averageCurrentStreak).toFixed(1)}d`
-                    : '0d'}
-                </span>
-                <span className="text-xs text-slate-500 font-medium">Avg Current Streak</span>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+              <div className="stat-card-footer">
                 <span>Active: <strong>{overview?.habits?.totalHabits ?? 0}</strong></span>
-                <span>Avg Best: <strong className="text-amber-600">{Number(overview?.habits?.averageLongestStreak ?? 0).toFixed(1)}d</strong></span>
+                <span>Avg Best: <strong className="stat-highlight-amber">{Number(overview?.habits?.averageLongestStreak ?? 0).toFixed(1)}d</strong></span>
               </div>
             </div>
 
             {/* 3. Medicine Card */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Medicine Adherence
-                </span>
-                <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-                  <Pill className="w-5 h-5" />
+            <div className="dashboard-stat-card">
+              <div>
+                <div className="stat-card-header">
+                  <span className="stat-card-title">Medicine Adherence</span>
+                  <div className="stat-icon-wrapper icon-medicines">
+                    <Link to={'/Medicine'} style={{'textDecoration' : 'none' , 'color' : 'inherit'}}>
+                    <Pill size={18} style={{'marginTop' : '5px'}}/></Link>
+                  </div>
+                </div>
+                <div className="stat-card-value-group">
+                  <span className="stat-card-value">
+                    {overview?.medicines?.adherenceRate !== null && overview?.medicines?.adherenceRate !== undefined
+                      ? `${Number(overview.medicines.adherenceRate).toFixed(0)}%`
+                      : 'N/A'}
+                  </span>
+                  <span className="stat-card-label">Compliance Rate</span>
                 </div>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-slate-900">
-                  {overview?.medicines?.adherenceRate !== null && overview?.medicines?.adherenceRate !== undefined
-                    ? `${Number(overview.medicines.adherenceRate).toFixed(0)}%`
-                    : 'N/A'}
-                </span>
-                <span className="text-xs text-slate-500 font-medium">Compliance Rate</span>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-                <span>Taken: <strong className="text-emerald-600">{overview?.medicines?.takenDoses ?? 0}</strong></span>
-                <span>Skipped: <strong className="text-amber-600">{overview?.medicines?.skippedDoses ?? 0}</strong></span>
-                <span>Missed: <strong className="text-rose-600">{overview?.medicines?.missedDoses ?? 0}</strong></span>
+              <div className="stat-card-footer">
+                <span>Taken: <strong className="stat-highlight-green">{overview?.medicines?.takenDoses ?? 0}</strong></span>
+                <span>Skipped: <strong className="stat-highlight-amber">{overview?.medicines?.skippedDoses ?? 0}</strong></span>
+                <span>Missed: <strong className="stat-highlight-red">{overview?.medicines?.missedDoses ?? 0}</strong></span>
               </div>
             </div>
 
             {/* 4. Daily Well-being Card */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Daily Check-Ins
-                </span>
-                <div className="p-2 rounded-xl bg-rose-50 text-rose-600">
-                  <Heart className="w-5 h-5" />
+            <div className="dashboard-stat-card">
+              <div>
+                <div className="stat-card-header">
+                  <span className="stat-card-title">Daily Check-Ins</span>
+                  <div className="stat-icon-wrapper icon-checkins">
+                    <Link to={'/check-ins'} style={{'textDecoration' : 'none', 'color' : 'inherit'}}>
+                    <Heart size={18} style={{'marginTop' : '5px'}}/></Link>
+                  </div>
+                </div>
+                <div className="stat-card-value-group">
+                  <span className="stat-card-value">
+                    {overview?.dailyCheckIns?.averageMood !== null && overview?.dailyCheckIns?.averageMood !== undefined
+                      ? `${Number(overview.dailyCheckIns.averageMood).toFixed(1)}/5`
+                      : 'N/A'}
+                  </span>
+                  <span className="stat-card-label">Avg Mood Score</span>
                 </div>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-slate-900">
-                  {overview?.dailyCheckIns?.averageMood !== null && overview?.dailyCheckIns?.averageMood !== undefined
-                    ? `${Number(overview.dailyCheckIns.averageMood).toFixed(1)}/5`
-                    : 'N/A'}
-                </span>
-                <span className="text-xs text-slate-500 font-medium">Avg Mood Score</span>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+              <div className="stat-card-footer">
                 <span>Energy: <strong>{Number(overview?.dailyCheckIns?.averageEnergy ?? 0).toFixed(1)}/5</strong></span>
                 <span>Productivity: <strong>{Number(overview?.dailyCheckIns?.averageProductivity ?? 0).toFixed(1)}/5</strong></span>
               </div>
@@ -214,31 +231,29 @@ export const Dashboard = () => {
           </div>
 
           {/* SECTION 2: CHARTS (Tasks Trend & Medicine Compliance) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="charts-grid-row">
             {/* Task Trend Chart */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Task Completion Trend</h3>
-                  <p className="text-xs text-slate-400">Scheduled due tasks vs completed per calendar date</p>
-                </div>
+            <div className="dashboard-chart-card">
+              <div className="chart-card-header">
+                <h3 className="chart-card-title">Task Completion Trend</h3>
+                <p className="chart-card-subtitle">Scheduled due tasks vs completed per calendar date</p>
               </div>
-              <div className="h-64 w-full">
+              <div className="chart-canvas-wrapper">
                 {charts?.taskTrend && charts.taskTrend.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={charts.taskTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
-                      <YAxis allowDecimals={false} tick={{ fontSize: 11 }} tickLine={false} />
-                      <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridStroke} />
+                      <XAxis dataKey="date" tick={chartAxisTick} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={chartAxisTick} tickLine={false} />
+                      <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} />
+                      <Legend wrapperStyle={chartLegendStyle} />
                       <Bar dataKey="due" name="Due" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="completed" name="Completed" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="completed" name="Completed" fill="#1677FF" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 text-sm">
-                    <CheckCircle2 className="w-8 h-8 text-slate-300 mb-2" />
+                  <div className="chart-empty-state">
+                    <CheckCircle2 size={32} />
                     <span>No task activity recorded in this period.</span>
                   </div>
                 )}
@@ -246,30 +261,28 @@ export const Dashboard = () => {
             </div>
 
             {/* Medicine Compliance Trend Chart */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Medicine Dose Trend</h3>
-                  <p className="text-xs text-slate-400">Expected schedule vs taken doses</p>
-                </div>
+            <div className="dashboard-chart-card">
+              <div className="chart-card-header">
+                <h3 className="chart-card-title">Medicine Dose Trend</h3>
+                <p className="chart-card-subtitle">Expected schedule vs taken doses</p>
               </div>
-              <div className="h-64 w-full">
+              <div className="chart-canvas-wrapper">
                 {charts?.medicineTrend && charts.medicineTrend.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={charts.medicineTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
-                      <YAxis allowDecimals={false} tick={{ fontSize: 11 }} tickLine={false} />
-                      <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridStroke} />
+                      <XAxis dataKey="date" tick={chartAxisTick} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={chartAxisTick} tickLine={false} />
+                      <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} />
+                      <Legend wrapperStyle={chartLegendStyle} />
                       <Line type="monotone" dataKey="expected" name="Expected" stroke="#94a3b8" strokeWidth={2} dot={{ r: 3 }} />
                       <Line type="monotone" dataKey="taken" name="Taken" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="missed" name="Missed" stroke="#f43f5e" strokeWidth={1.5} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="missed" name="Missed" stroke="#dc2626" strokeWidth={1.5} dot={{ r: 3 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 text-sm">
-                    <Pill className="w-8 h-8 text-slate-300 mb-2" />
+                  <div className="chart-empty-state">
+                    <Pill size={32} />
                     <span>No medicine doses scheduled in this period.</span>
                   </div>
                 )}
@@ -278,32 +291,30 @@ export const Dashboard = () => {
           </div>
 
           {/* SECTION 3: CHARTS (Daily Check-In Trends & Mood Distribution) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="charts-grid-row">
             {/* Daily Check-In Trend Chart */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Well-Being Trends</h3>
-                  <p className="text-xs text-slate-400">Daily mood, energy, and productivity (1-5 scale)</p>
-                </div>
+            <div className="dashboard-chart-card">
+              <div className="chart-card-header">
+                <h3 className="chart-card-title">Well-Being Trends</h3>
+                <p className="chart-card-subtitle">Daily mood, energy, and productivity (1-5 scale)</p>
               </div>
-              <div className="h-64 w-full">
+              <div className="chart-canvas-wrapper">
                 {charts?.dailyCheckInTrend && charts.dailyCheckInTrend.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={charts.dailyCheckInTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
-                      <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 11 }} tickLine={false} />
-                      <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Line type="monotone" dataKey="moodScore" name="Mood" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="energy" name="Energy" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
-                      <Line type="monotone" dataKey="productivity" name="Productivity" stroke="#06b6d4" strokeWidth={2} dot={{ r: 3 }} />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridStroke} />
+                      <XAxis dataKey="date" tick={chartAxisTick} tickLine={false} />
+                      <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={chartAxisTick} tickLine={false} />
+                      <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} />
+                      <Legend wrapperStyle={chartLegendStyle} />
+                      <Line type="monotone" dataKey="moodScore" name="Mood" stroke="#8B5CF6" strokeWidth={2.5} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="energy" name="Energy" stroke="#F59E0B" strokeWidth={2} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="productivity" name="Productivity" stroke="#1677FF" strokeWidth={2} dot={{ r: 3 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 text-sm">
-                    <Smile className="w-8 h-8 text-slate-300 mb-2" />
+                  <div className="chart-empty-state">
+                    <Smile size={32} />
                     <span>No check-ins submitted in this period.</span>
                   </div>
                 )}
@@ -311,27 +322,25 @@ export const Dashboard = () => {
             </div>
 
             {/* Mood Distribution */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Mood Frequency Distribution</h3>
-                  <p className="text-xs text-slate-400">Total occurrences by psychological state</p>
-                </div>
+            <div className="dashboard-chart-card">
+              <div className="chart-card-header">
+                <h3 className="chart-card-title">Mood Frequency Distribution</h3>
+                <p className="chart-card-subtitle">Total occurrences by psychological state</p>
               </div>
-              <div className="h-64 w-full">
+              <div className="chart-canvas-wrapper">
                 {moodDistributionData.some((d) => d.count > 0) ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={moodDistributionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="mood" tick={{ fontSize: 10 }} tickLine={false} />
-                      <YAxis allowDecimals={false} tick={{ fontSize: 11 }} tickLine={false} />
-                      <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
-                      <Bar dataKey="count" name="Count" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridStroke} />
+                      <XAxis dataKey="mood" tick={chartAxisTick} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={chartAxisTick} tickLine={false} />
+                      <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} itemStyle={chartTooltipItemStyle} />
+                      <Bar dataKey="count" name="Count" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 text-sm">
-                    <Heart className="w-8 h-8 text-slate-300 mb-2" />
+                  <div className="chart-empty-state">
+                    <Heart size={32} />
                     <span>No mood records available for distribution.</span>
                   </div>
                 )}
@@ -341,34 +350,32 @@ export const Dashboard = () => {
 
           {/* SECTION 4: MEDICINE BREAKDOWN TABLE */}
           {details?.medicineBreakdown && details.medicineBreakdown.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <h3 className="text-base font-bold text-slate-900 mb-3">Medicine Compliance Breakdown</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold tracking-wider">
+            <div className="dashboard-table-card">
+              <h3 className="table-card-title">Medicine Compliance Breakdown</h3>
+              <div className="table-responsive">
+                <table className="dashboard-data-table">
+                  <thead>
                     <tr>
-                      <th className="py-3 px-4 rounded-l-xl">Medicine</th>
-                      <th className="py-3 px-4">Expected Doses</th>
-                      <th className="py-3 px-4">Taken Doses</th>
-                      <th className="py-3 px-4">Missed Doses</th>
-                      <th className="py-3 px-4">Adherence Rate</th>
-                      <th className="py-3 px-4 rounded-r-xl">Status</th>
+                      <th>Medicine</th>
+                      <th>Expected Doses</th>
+                      <th>Taken Doses</th>
+                      <th>Missed Doses</th>
+                      <th>Adherence Rate</th>
+                      <th>Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody>
                     {details.medicineBreakdown.map((item) => (
-                      <tr key={item.medicineId} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-3 px-4 font-semibold text-slate-800">{item.name}</td>
-                        <td className="py-3 px-4 text-slate-600">{item.expectedDoses}</td>
-                        <td className="py-3 px-4 text-emerald-600 font-semibold">{item.takenDoses}</td>
-                        <td className="py-3 px-4 text-rose-600 font-semibold">{item.missedDoses}</td>
-                        <td className="py-3 px-4 font-bold text-slate-900">{Number(item.adherenceRate).toFixed(0)}%</td>
-                        <td className="py-3 px-4">
+                      <tr key={item.medicineId}>
+                        <td style={{ fontWeight: 600 }}>{item.name}</td>
+                        <td>{item.expectedDoses}</td>
+                        <td className="stat-highlight-green">{item.takenDoses}</td>
+                        <td className="stat-highlight-red">{item.missedDoses}</td>
+                        <td style={{ fontWeight: 700 }}>{Number(item.adherenceRate).toFixed(0)}%</td>
+                        <td>
                           <span
-                            className={`text-xs px-2.5 py-0.5 rounded-full font-medium capitalize ${
-                              item.status === 'active'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-slate-100 text-slate-600'
+                            className={`status-badge ${
+                              item.status === 'active' ? 'status-active' : 'status-inactive'
                             }`}
                           >
                             {item.status}

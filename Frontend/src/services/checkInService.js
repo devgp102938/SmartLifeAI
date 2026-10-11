@@ -19,6 +19,11 @@ export const checkInService = {
     }
   },
 
+  async getHistory({ page = 1, limit = 20 } = {}) {
+    const res = await this.getCheckIns({ page, limit });
+    return res.checkIns;
+  },
+
   async getCheckInByDate(date) {
     try {
       const res = await api.get(`/api/check-ins/date/${date}`);
